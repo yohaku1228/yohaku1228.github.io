@@ -23,6 +23,14 @@ const milestone = z.object({ id, label, month: month.nullable(), fixedExpenseId:
 const records = <T extends { id: string }>(schema: z.ZodType<T>) => z.array(schema)
   .refine(rows => new Set(rows.map(row => row.id)).size === rows.length)
 
+const legacyIncome = z.object({ id, name: label, amount: integer })
+const legacyMonths = z.record(month, z.object({
+  incomes: z.array(legacyIncome),
+  expenses: z.array(legacyIncome.extend({ account: z.string() })),
+  transferredStatus: z.record(z.string(), z.boolean()).default({}),
+}))
+const legacyArchiveSchema = z.object({ months: legacyMonths, rakutenCount: z.int().nonnegative() })
+
 const ledgerSchema: z.ZodType<Ledger> = z.object({
   household: z.object({ id, name: label, size: z.int().min(1).max(30), currency: z.literal('JPY') }),
   users: records(z.object({ id, name: label, householdId: id })).length(2),
@@ -46,6 +54,8 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
     closingDay: dayOfMonth, debitDay: dayOfMonth, debitLag: z.int().min(1).max(3),
   })),
   settled: z.array(id),
+  statementTotals: z.record(id, integer).optional(),
+  legacyArchive: legacyArchiveSchema.optional(),
   transfers: records(z.object({ id, date: day, from: id, to: id, amount: amount.positive(), completed: z.boolean(), purpose: z.enum(['transfer', 'savings', 'withdrawal']) })
     .refine(transfer => transfer.from !== transfer.to)),
   annual: records(annual),
@@ -77,7 +87,7 @@ const backupSchema = z.object({ format: z.literal('household-pwa-v1'), ledger: l
 const legacySchema = z.object({
   format: z.literal('finance-unified-v1'),
   data: z.object({
-    kakeibo_data_v5: z.object({ monthlyData: z.record(z.string(), z.unknown()) }).nullable(),
+    kakeibo_data_v5: z.object({ monthlyData: legacyMonths }).nullable(),
     rakuten_alert_checker_v3: z.object({ transactions: z.array(z.unknown()) }).nullable(),
   }),
 })
@@ -86,10 +96,12 @@ export const backup = (ledger: Ledger) => ({ format: 'household-pwa-v1' as const
 
 export function inspectImport(value: unknown) {
   const legacy = legacySchema.safeParse(value)
-  if (legacy.success) return {
-    type: 'legacy' as const,
-    months: Object.keys(legacy.data.data.kakeibo_data_v5?.monthlyData ?? {}).length,
-    transactions: legacy.data.data.rakuten_alert_checker_v3?.transactions.length ?? 0,
+  if (legacy.success) {
+    const archive = {
+      months: legacy.data.data.kakeibo_data_v5?.monthlyData ?? {},
+      rakutenCount: legacy.data.data.rakuten_alert_checker_v3?.transactions.length ?? 0,
+    }
+    return { type: 'legacy' as const, archive }
   }
   const saved = backupSchema.safeParse(value)
   if (saved.success) return { type: 'backup' as const, ledger: saved.data.ledger }

@@ -34,7 +34,28 @@ export function Accounts({ data, month, save }: { data: Ledger; month: Month; sa
         {data.incomes.some(i => monthOf(i.date) === month && i.route === 'undecided') && <p className="notice">負担方法が未定の収入は、口座への入金見込みに含めていません。</p>}
       </Panel>
       <Panel title="カード別の引落予定" description="カード利用は利用月の生活費、引落は引落月の口座資金として集計します。">
-        <ul className="rows">{bills.map(bill => <li key={bill.id}><span><b>{data.payments.find(p => p.id === bill.paymentId)?.name}</b><small>{bill.date} ・ 明細 {bill.itemCount}件</small></span><Amount value={bill.amount} /><label className="check"><input type="checkbox" checked={bill.paid} onChange={() => toggle(bill.id)} /> 引落済み</label></li>)}</ul>
+        <ul className="rows">{bills.map(bill => {
+          const statement = data.statementTotals?.[bill.id]
+          const difference = statement === undefined ? undefined : statement - bill.amount
+          return <li className="bill" key={bill.id}>
+            <span><b>{data.payments.find(p => p.id === bill.paymentId)?.name}</b><small>{bill.date} ・ 明細 {bill.itemCount}件</small></span>
+            <Amount value={bill.amount} />
+            <label className="check"><input type="checkbox" checked={bill.paid} onChange={() => toggle(bill.id)} /> 引落済み</label>
+            <details>
+              <summary>{difference === undefined ? 'カード会社の請求額と照合' : difference === 0 ? '照合済み ・ 一致' : `請求額との差 ${yen(difference)}`}</summary>
+              <form key={String(statement)} onSubmit={form(fields => save(old => {
+                const statementTotals = { ...old.statementTotals }
+                if (str(fields, 'statement')) statementTotals[bill.id] = num(fields, 'statement')
+                else delete statementTotals[bill.id]
+                return { ...old, statementTotals }
+              }))}>
+                <Field label="カード会社の請求額（円）"><Money name="statement" value={statement} required={false} negative /></Field>
+                <p className="hint">記録の合計との差を表示します。空欄で保存すると照合額を取り消せます。</p>
+                <button className="quiet">照合額を保存</button>
+              </form>
+            </details>
+          </li>
+        })}</ul>
         {!bills.length && <p className="empty">カード利用を登録すると、ここに引落予定が表示されます。</p>}
         <details><summary>カードの追加・締め日設定</summary>
           <div className="actions">{data.payments.filter(p => p.kind === 'card').map(p => <button className="quiet" key={p.id} onClick={() => editCard(p.id)}>{p.name}を編集</button>)}</div>

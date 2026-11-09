@@ -1,11 +1,33 @@
 import { useState } from 'react'
 import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
-import type { Day, Ledger, Month, Transaction } from './model'
-import { Amount, Field, form, Money, num, Panel, str, uid, type Save } from './ui'
+import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
+import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
 
 function billId(data: Ledger, transaction: Transaction) {
   const payment = data.payments.find(p => p.id === transaction.paymentId)
   return payment?.kind === 'card' ? `card:${payment.id}:${debitDate(transaction, payment)}` : ''
+}
+
+function PurchaseLines({ categories, items }: { categories: Ledger['categories']; items: TransactionItem[] }) {
+  const [lines, setLines] = useState<{ id: string; item?: TransactionItem }[]>(() => items.length
+    ? items.map(item => ({ id: item.id, item }))
+    : [{ id: uid(), item: undefined }])
+
+  return <div className="purchase-lines">
+    {lines.map(({ id, item }, index) => <fieldset key={id}>
+      <legend>{lines.length === 1 ? '明細' : `明細 ${index + 1}`}</legend>
+      <input type="hidden" name="item-id" value={id} />
+      <div className="fields">
+        <Field label="金額（円）"><Money name="amount" value={item?.amount} negative /></Field>
+        <Field label="カテゴリー"><select name="category" defaultValue={item?.categoryId ?? 'food'}>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="品名（任意）"><input name="item-name" defaultValue={item?.name} maxLength={100} placeholder="例：お米" /></Field>
+        <Field label="割引（円）"><Money name="discount" value={item?.discount} required={false} /></Field>
+      </div>
+      {lines.length > 1 && <button type="button" className="quiet negative" aria-label={`明細 ${index + 1} を外す`}
+        onClick={() => setLines(previous => previous.filter(line => line.id !== id))}>この明細を外す</button>}
+    </fieldset>)}
+    <button type="button" className="quiet" onClick={() => setLines(previous => [...previous, { id: uid(), item: undefined }])}>＋ 明細を追加</button>
+  </div>
 }
 
 export function Records({ data, month, save, editing, setEditing, setMonth }: {
@@ -25,16 +47,29 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
   return <div className="stack">
     <Panel title={current ? '支出を編集' : '支出を記録'} description="支出には購入日を使います。返金はマイナスの金額で登録できます。">
       <form key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
-        const categoryId = str(fields, 'category')
-        const allowance = data.categories.find(c => c.id === categoryId)?.allowance
+        const categories = fields.getAll('category').map(String)
+        const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
+        const allowance = allowanceLines.length > 0
         const date = str(fields, 'date')
         const paymentId = str(fields, 'payment')
         const fixedExpenseId = str(fields, 'fixed') || undefined
         const merchant = allowance ? 'お小遣い支給' : str(fields, 'merchant')
+        const names = fields.getAll('item-name').map(value => String(value).trim())
+        const amounts = fields.getAll('amount').map(Number)
+        const discounts = fields.getAll('discount').map(Number)
+        const items = fields.getAll('item-id').map((value, index) => ({
+          id: String(value),
+          name: allowance ? merchant : names[index] || merchant,
+          categoryId: categories[index],
+          quantity: current?.items.find(item => item.id === value)?.quantity ?? 1,
+          amount: amounts[index],
+          discount: discounts[index],
+        }))
         const record: Transaction = {
           id: current?.id ?? uid(), date, merchant, paymentId, fixedExpenseId,
           memo: allowance ? '' : str(fields, 'memo'), personal: fields.has('personal') && !allowance,
-          items: [{ id: current?.items[0]?.id ?? uid(), name: merchant, categoryId, quantity: 1, amount: num(fields, 'amount'), discount: 0 }],
+          items,
+          receiptId: current?.receiptId,
         }
         const payment = data.payments.find(p => p.id === paymentId)
         if (payment?.kind === 'card') record.debitOn =
@@ -44,6 +79,10 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
           transactionAmount(t) === transactionAmount(record))
         if (duplicate && !window.confirm('同日・同じ店舗・同じ金額の記録があります。別の支出として保存しますか？')) return
         if (save(old => {
+          if (allowance && items.length !== 1) throw new Error('お小遣いの支給は、買い物と分けて1件で記録してください。')
+          if (items.some(item => item.discount > Math.max(0, item.amount))) {
+            throw new Error('割引は各明細の金額以下にしてください。返金の割引は0円です。')
+          }
           if (record.fixedExpenseId) {
             const usageMonth = monthOf(record.date)
             const target = activeFixed(old, usageMonth).find(f => f.id === record.fixedExpenseId)
@@ -70,19 +109,18 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
         <div className="fields">
           <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
           <Field label="店舗・品名"><input name="merchant" defaultValue={current?.merchant} placeholder="例：スーパー" maxLength={100} /></Field>
-          <Field label="金額（円）"><Money name="amount" value={current ? transactionAmount(current) : null} negative /></Field>
-          <Field label="カテゴリー"><select name="category" defaultValue={current?.items[0].categoryId ?? 'food'}>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? 'cash'}>{data.payments.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
           {data.fixed.length > 0 && <Field label="固定費に紐づける"><select name="fixed" defaultValue={current?.fixedExpenseId ?? ''}><option value="">生活費として記録</option>{data.fixed.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
           <Field label="メモ"><input name="memo" defaultValue={current?.memo} maxLength={500} placeholder="任意" /></Field>
         </div>
+        <PurchaseLines items={current?.items ?? []} categories={data.categories} />
         <label className="check"><input type="checkbox" name="personal" defaultChecked={current?.personal} /> 個人の買い物として生活費から除外</label>
         <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}</div>
       </form>
     </Panel>
     <Panel title="この月の履歴">
       {rows.length === 0 && <p className="empty">まだ支出がありません。</p>}
-      <ul className="rows">{rows.map(t => <li key={t.id}><span><b>{t.merchant}</b><small>{t.date} ・ {data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span><Amount value={transactionAmount(t)} /><div className="row-actions"><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button><button className="quiet negative" onClick={() => remove(t)}>削除</button></div></li>)}</ul>
+      <ul className="rows">{rows.map(t => <li key={t.id}><span><b>{t.merchant}</b><small>{t.date} ・ {t.items.length > 1 ? `${t.items.length}明細` : data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span><Amount value={transactionAmount(t)} /><div className="row-actions"><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button><button className="quiet negative" onClick={() => remove(t)}>削除</button></div></li>)}</ul>
     </Panel>
   </div>
 }

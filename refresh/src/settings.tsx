@@ -26,7 +26,7 @@ export function Settings({ data, month, save }: { data: Ledger; month: Month; sa
     download('家計とカード-支出明細.csv', '\uFEFF' + csv.map(row => row.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8')
   }
   return <div className="stack">
-    <Panel title="保存とデータ移行" description="このレビュー版のデータは、この端末のブラウザーに保存されます。">
+    <Panel title="保存とデータ移行" description="家計はこの端末のブラウザーに保存されます。端末を替える前は、JSONバックアップを保管してください。">
       <div className="actions"><button className="primary" onClick={exportLedger}>JSONバックアップ</button><button className="quiet" onClick={exportCsv}>支出をCSV出力</button></div>
       <Field label="バックアップ・初期設定ファイルを選ぶ"><input type="file" accept=".json,application/json" onChange={async event => {
         const input = event.currentTarget
@@ -40,7 +40,17 @@ export function Settings({ data, month, save }: { data: Ledger; month: Month; sa
         } catch (error) { setStatus(error instanceof Error ? error.message : 'ファイルを読み込めません。') }
         finally { input.value = '' }
       }} /></Field>
-      {preview?.type === 'legacy' && <p className="notice">旧バックアップを確認しました。家計 {preview.months}か月、楽天明細 {preview.transactions}件。元のファイルを保管してください。</p>}
+      {preview?.type === 'legacy' && <div className="notice">
+        <p>旧バックアップを確認しました。家計 {Object.keys(preview.archive.months).length}か月、楽天明細 {preview.archive.rakutenCount}件。</p>
+        <p>旧家計の金額は参照用に保管します。刷新版の残高や支出には加算されません。</p>
+        <button className="quiet" onClick={() => {
+          if (data.legacyArchive && !window.confirm('旧家計の参照データを、このファイルの内容に置き換えますか？')) return
+          if (save(old => ({ ...old, legacyArchive: preview.archive }))) {
+            setPreview(null)
+            setStatus('旧家計を参照用に保管しました。')
+          }
+        }}>旧家計を参照用に保存</button>
+      </div>}
       {preview?.type === 'backup' && <div className="notice">
         <p>家計「{preview.ledger.household.name}」 ・ 月別予算 {preview.ledger.budgets.length}件 ・ 支出 {preview.ledger.transactions.length}件</p>
         <button className="quiet" onClick={() => {
@@ -72,6 +82,7 @@ export function Settings({ data, month, save }: { data: Ledger; month: Month; sa
       </div>}
       {status && <p role="status" className="hint">{status}</p>}
     </Panel>
+    {data.legacyArchive && <LegacyHistory archive={data.legacyArchive} />}
     <Panel title="カテゴリーと色">
       <ul className="rows">{data.categories.map(c => <li key={c.id}><b className="category"><i style={{ background: c.color }} />{c.name}</b><button className="quiet" onClick={() => edit(c.id)}>編集</button></li>)}</ul>
       <form key={category?.id ?? data.categories.length} onSubmit={form(fields => {
@@ -88,9 +99,33 @@ export function Settings({ data, month, save }: { data: Ledger; month: Month; sa
         <div className="fields"><Field label="表示名"><input name="name" defaultValue={data.household.name} maxLength={100} required /></Field><Field label="家族の人数"><input name="size" type="number" min="1" max="30" defaultValue={data.household.size} required /></Field></div>
         <div className="actions"><button className="primary">設定を保存</button></div>
       </form>
-      <p className="hint">iPhoneのSafariから共有メニューを開き、「ホーム画面に追加」を選びます。</p>
+      <p className="hint">iPhoneのSafariで共有 → ホーム画面に追加を選びます。「ウェブアプリとして開く」が表示されたらオンにします。初回はオンラインで開いてください。</p>
     </Panel>
   </div>
+}
+
+function LegacyHistory({ archive }: { archive: NonNullable<Ledger['legacyArchive']> }) {
+  const months = Object.keys(archive.months).sort().reverse()
+  const [selected, setSelected] = useState('')
+  const visible = months.includes(selected) ? selected : months[0]
+  const records = archive.months[visible]
+  return <Panel title="旧家計の参照" description="旧サイトで保存された金額です。予定と実績の区別は元データの内容に従います。">
+    {records ? <>
+      <Field label="旧家計の月"><select value={visible} onChange={event => setSelected(event.target.value)}>
+        {months.map(month => <option key={month} value={month}>{month}</option>)}
+      </select></Field>
+      <div className="stats">
+        <Stat label="収入の登録額" value={sum(records.incomes.map(item => item.amount))} />
+        <Stat label="支出の登録額" value={sum(records.expenses.map(item => item.amount))} />
+      </div>
+      <details><summary>収入と支出の内訳</summary>
+        <ul className="rows">
+          {records.incomes.map((item, index) => <li key={`income:${index}`}><span>{item.name}<small>収入</small></span><Amount value={item.amount} /></li>)}
+          {records.expenses.map((item, index) => <li key={`expense:${index}`}><span>{item.name}<small>{item.account}</small></span><Amount value={item.amount} /></li>)}
+        </ul>
+      </details>
+    </> : <p className="hint">旧家計の月別データはありません。</p>}
+  </Panel>
 }
 
 export function Analysis({ data, month }: { data: Ledger; month: Month }) {

@@ -45,8 +45,18 @@ export interface Ledger {
   incomes: Income[]; budgets: Budget[]; defaultBudget: Record<Id, Yen>
   weeklyBudgets: WeeklyBudget[]; fixed: FixedExpense[]; transactions: Transaction[]
   receipts: Receipt[]; payments: PaymentMethod[]; settled: Id[]; transfers: Transfer[]
+  statementTotals?: Record<Id, Yen>
+  legacyArchive?: LegacyArchive
   annual: AnnualBudget[]; annualActuals: AnnualActual[]; savingsGoals: SavingsGoal[]
   milestones: FinancialMilestone[]; advice: AIAdvice[]; recipes: RecipeSuggestion[]
+}
+export interface LegacyArchive {
+  months: Record<Month, {
+    incomes: { id: Id; name: string; amount: Yen }[]
+    expenses: { id: Id; name: string; amount: Yen; account: string }[]
+    transferredStatus: Record<string, boolean>
+  }>
+  rakutenCount: number
 }
 export interface Plan {
   budget: Record<Id, Yen>; incomes: { userId: Id; amount: Yen; route: Income['route'] }[]

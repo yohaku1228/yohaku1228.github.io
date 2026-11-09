@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CirclePlus, Ellipsis, House, Leaf, Settings2, Wallet } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CirclePlus, Ellipsis, House, Settings2, Wallet } from 'lucide-react'
 import { Accounts } from './accounts'
 import { accountProjection, addMonths, annualSummary, cardBills, cashEvents, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
@@ -32,8 +32,10 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
   const projection = accountProjection(account, cashEvents(data, month), month)
   const bill = cardBills(data).find(b => !b.paid && b.amount !== 0)
   const ratio = totals.allocated > 0 ? Math.round(totals.spent / totals.allocated * 100) : null
-  const empty = totals.allocated === 0 && totals.income === 0 && totals.fixed === 0
+  const needsSetup = !data.budgets.length && !data.fixed.length && !data.incomes.length && !Object.keys(data.defaultBudget).length
+  const hasIncome = data.incomes.some(income => monthOf(income.date) === month)
   return <div className="stack">
+    {needsSetup && <section className="onboarding"><div><b>まず、今月の計画を設定</b><p>初期設定ファイルを読み込むと、給与・固定費・生活費がまとまって入ります。</p></div><button className="quiet" onClick={() => go('settings')}>設定へ <ArrowRight size={16} /></button></section>}
     <section className="hero">
       <span className="hero-label"><Wallet size={17} /> あと使える生活費</span>
       <strong className="hero-amount">{yen(totals.remaining)}</strong>
@@ -41,7 +43,7 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
       <progress aria-label="生活費の予算消化率" max="100" value={Math.max(0, Math.min(100, ratio ?? 0))} />
       <button onClick={() => go('records')}><CirclePlus size={17} /> 支出を記録</button>
     </section>
-    {empty && <section className="onboarding"><div><b>今月の計画を立てましょう</b><p>収入と予算を入力するか、設定から初期設定ファイルを読み込めます。</p></div><button className="quiet" onClick={() => go('settings')}>設定へ <ArrowRight size={16} /></button></section>}
+    {!needsSetup && !hasIncome && <section className="onboarding"><div><b>この月の収入が未登録です</b><p>収入を登録すると、貯蓄と口座の見通しを計算できます。</p></div><button className="quiet" onClick={() => go('planning')}>収入を登録 <ArrowRight size={16} /></button></section>}
     <div className="stats">
       <Stat label="食費の残り" value={(totals.budget.amounts.food ?? 0) - (totals.categorySpend.food ?? 0)} />
       <Stat label={month === monthOf(today()) ? '今日使える食費' : '月初の食費目安 / 日'} value={week.daily} detail={week.startDate.slice(5) + ' 〜 ' + week.endDate.slice(5)} />
@@ -96,7 +98,6 @@ function App() {
             <button onClick={() => go('settings')}><Settings2 size={22} /> 設定とバックアップ <ArrowRight size={17} /></button>
           </div>
         </Panel>
-        <section className="onboarding"><Leaf size={23} /><div><b>AI節約・献立</b><p>今後、家計の計算結果をもとに買い物や夕食を提案します。</p></div></section>
       </div>}
     </main>
     <nav className="nav" aria-label="メインメニュー"><div>{tabs.map(({ id, name, icon: Icon }) => <button key={id} aria-current={nav === id ? 'page' : undefined} onClick={() => { if (id === 'records') setEditing(null); go(id) }}><Icon size={22} strokeWidth={nav === id ? 2.3 : 1.8} /><span>{name}</span></button>)}</div></nav>
@@ -104,3 +105,9 @@ function App() {
 }
 
 createRoot(document.getElementById('root')!).render(<App />)
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(error => {
+    console.warn('オフライン準備ができませんでした。', error)
+  })
+}
