@@ -1,37 +1,55 @@
-import { createClient } from '@supabase/supabase-js'
 import type { Ledger } from './model'
 
-const endpoint = import.meta.env.VITE_SUPABASE_URL
-const publicKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-export const supabase = endpoint && publicKey ? createClient(endpoint, publicKey) : null
+export const cloudEnabled = import.meta.env.VITE_CLOUDFLARE === '1'
 
-export async function pullLedger() {
-  if (!supabase) throw new Error('接続設定がありません。')
-  const { data, error } = await supabase.from('household_ledger').select('ledger,revision').maybeSingle()
-  if (error) throw new Error('クラウドの家計を読み込めませんでした。')
-  return data
+async function request(path: string, options: RequestInit = {}) {
+  return fetch('/api/' + path, { ...options, cache: 'no-store', credentials: 'same-origin', redirect: 'error' })
 }
 
-export async function pushLedger(expectedRevision: number, ledger: Ledger): Promise<number | null> {
-  if (!supabase) throw new Error('接続設定がありません。')
-  const { data, error } = await supabase.rpc('save_household_ledger', { expected_revision: expectedRevision, new_ledger: ledger })
-  if (error || (data !== null && !Number.isInteger(data))) throw new Error('クラウドへの保存に失敗しました。')
-  return data
+async function message(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null)
+  return typeof body?.error === 'string' ? body.error : fallback
+}
+
+export async function currentOwner(): Promise<string | null> {
+  const response = await request('session')
+  if (!response.ok) throw new Error(await message(response, 'ログイン状態を確認できません。'))
+  return (await response.json()).owner
+}
+
+export async function login(password: string): Promise<string> {
+  const response = await request('login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+  })
+  if (!response.ok) throw new Error(await message(response, 'ログインできませんでした。'))
+  return (await response.json()).owner
+}
+
+export async function logout() {
+  if (!(await request('logout', { method: 'POST' })).ok) throw new Error('ログアウトできませんでした。')
+}
+
+export async function pullLedger(): Promise<{ ledger: unknown; revision: number } | null> {
+  const response = await request('ledger')
+  if (!response.ok) throw new Error(await message(response, 'クラウドの家計を読み込めませんでした。'))
+  return response.json()
+}
+
+export async function pushLedger(revision: number, ledger: Ledger): Promise<number | null> {
+  const response = await request('ledger', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision, ledger }),
+  })
+  if (response.status === 409) return null
+  if (!response.ok) throw new Error(await message(response, 'クラウドへの保存に失敗しました。'))
+  const body = await response.json()
+  if (!Number.isSafeInteger(body.revision) || body.revision !== revision + 1) throw new Error('クラウドの保存結果を確認できませんでした。')
+  return body.revision
 }
 
 export async function readReceipt(image: Blob, signal: AbortSignal) {
-  if (!supabase) throw new Error('レシート読み取りの接続準備が必要です。')
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('ログインし直してください。')
-  const response = await fetch(new URL('/functions/v1/receipt', endpoint), {
-    method: 'POST', signal, redirect: 'error',
-    headers: { 'Content-Type': 'image/jpeg', Authorization: 'Bearer ' + session.access_token },
-    body: image,
+  const response = await request('receipt', {
+    method: 'POST', signal, headers: { 'Content-Type': 'image/jpeg' }, body: image,
   })
-  const payload: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    const detail = payload as { error?: unknown } | null
-    throw new Error(typeof detail?.error === 'string' ? detail.error : 'レシートを読み取れませんでした。')
-  }
-  return payload
+  if (!response.ok) throw new Error(await message(response, 'レシートを読み取れませんでした。'))
+  return response.json() as Promise<unknown>
 }

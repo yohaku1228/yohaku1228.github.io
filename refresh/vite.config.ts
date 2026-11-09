@@ -4,6 +4,6 @@ import tailwindcss from '@tailwindcss/vite'
 import { offlineBuild } from './pwa-build'
 
 export default defineConfig({
-  base: '/refresh/',
+  base: process.env.VITE_CLOUDFLARE === '1' ? '/' : '/refresh/',
   plugins: [react(), tailwindcss(), offlineBuild()],
 })

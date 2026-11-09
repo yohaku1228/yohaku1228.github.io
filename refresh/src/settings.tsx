@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { addMonths, activeFixed, annualSummary, monthly, onDay, sum, yen } from './finance'
 import type { Ledger, Month } from './model'
 import { backup, download, inspectImport, useLedger } from './storage'
-import { supabase } from './cloud'
+import { cloudEnabled } from './cloud'
 import { Amount, BudgetRow, Field, form, num, Panel, Stat, str, uid, type Save } from './ui'
 
 export function Settings({ data, month, save }: { data: Ledger; month: Month; save: Save }) {
@@ -27,7 +27,7 @@ export function Settings({ data, month, save }: { data: Ledger; month: Month; sa
     download('家計とカード-支出明細.csv', '\uFEFF' + csv.map(row => row.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8')
   }
   return <div className="stack">
-    <Panel title="保存とデータ移行" description={supabase ? 'クラウドに保存済みの家計は、同じアカウントで別の端末から開けます。' : '家計はこの端末のブラウザーに保存されます。端末を替える前は、JSONバックアップを保管してください。'}>
+    <Panel title="保存とデータ移行" description={cloudEnabled ? 'クラウドに保存済みの家計は、別の端末からログインして開けます。' : '家計はこの端末のブラウザーに保存されます。端末を替える前は、JSONバックアップを保管してください。'}>
       <div className="actions"><button className="primary" onClick={exportLedger}>JSONバックアップ</button><button className="quiet" onClick={exportCsv}>支出をCSV出力</button></div>
       <Field label="バックアップ・初期設定ファイルを選ぶ"><input type="file" accept=".json,application/json" onChange={async event => {
         const input = event.currentTarget

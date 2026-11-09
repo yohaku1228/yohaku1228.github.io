@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
-import { supabase } from './cloud'
+import { cloudEnabled } from './cloud'
 import { ReceiptReader, type ReceiptScan } from './receipt'
 
 function billId(data: Ledger, transaction: Transaction) {
@@ -54,7 +54,7 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
     })
   }
   return <div className="stack">
-    {supabase && !current && <Panel title="レシートを読み取る">
+    {cloudEnabled && !current && <Panel title="レシートを読み取る">
       <ReceiptReader seen={fingerprint => data.receipts.some(receipt => receipt.fingerprint === fingerprint)} onRead={read => {
         if (inputDirty.current && !window.confirm('入力中の内容を読み取った明細に置き換えますか？')) return
         inputDirty.current = false

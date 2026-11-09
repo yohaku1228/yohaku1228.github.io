@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { daysInMonth, monthOf } from './finance'
 import type { Ledger, Plan } from './model'
 import { starter } from './seed'
-import { pushLedger, supabase } from './cloud'
+import { pushLedger, cloudEnabled } from './cloud'
 
 const id = z.string().min(1).max(200)
 const label = z.string().trim().min(1).max(200)
@@ -157,7 +157,7 @@ export function existingDeviceLedger(): Ledger | null {
 export const useLedger = create<Store>((set, get) => {
   let initial: ReturnType<LedgerRepository['read']> = null
   let readError = ''
-  try { if (!supabase) initial = repository.read() } catch {
+  try { if (!cloudEnabled) initial = repository.read() } catch {
     readError = '保存データを読み込めませんでした。既存の保存データを保護するため、編集を停止しました。'
   }
   let ledger = initial?.ledger ?? starter()
@@ -207,7 +207,7 @@ export const useLedger = create<Store>((set, get) => {
     retryCloud() { void flush() },
     update(action) {
       try {
-        if (supabase && !cloud) throw new Error('家計を読み込み直してください。')
+        if (cloudEnabled && !cloud) throw new Error('家計を読み込み直してください。')
         if (cloud && get().cloudStatus !== 'ready') throw new Error('先に未送信の変更を確認してください。')
         if (readError) throw new Error(readError)
         const next = action(ledger)

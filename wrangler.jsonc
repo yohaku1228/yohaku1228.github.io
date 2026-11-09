@@ -1,0 +1,10 @@
+{
+  "name": "kakei-to-card",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-11-09",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "directory": "./refresh/dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "kakei-to-card", "migrations_dir": "worker/migrations" }],
+  "ratelimits": [{ "name": "LOGIN_LIMIT", "namespace_id": "741026", "simple": { "limit": 5, "period": 60 } }]
+}

@@ -32,11 +32,11 @@ async function readImage(request) {
   return bytes.subarray(0, length)
 }
 
-export function createReceiptHandler({ origin, apiKey, isAuthorized, freeTierConfirmed, upstream = fetch }) {
+export function createReceiptHandler({ origin, apiKey, takeQuota, freeTierConfirmed, upstream = fetch }) {
   const cors = {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'content-type, authorization',
+    'Access-Control-Allow-Headers': 'content-type',
     'Cache-Control': 'no-store',
     Vary: 'Origin',
   }
@@ -51,14 +51,11 @@ export function createReceiptHandler({ origin, apiKey, isAuthorized, freeTierCon
     }
     if (request.headers.get('content-type') !== 'image/jpeg') return result(415, { error: 'JPEG画像を選んでください。' })
     try {
-      const authorization = request.headers.get('authorization')
-      if (!authorization?.startsWith('Bearer ') || !await isAuthorized(authorization.slice(7))) {
-        return result(401, { error: 'レシートを読み取るには、登録済みのアカウントでログインしてください。' })
-      }
       const bytes = await readImage(request)
       if (!bytes || bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216) {
         return result(400, { error: '画像を読み込めないか、サイズが大きすぎます。' })
       }
+      if (!await takeQuota()) return result(429, { error: '今日の読み取り上限に達しました。' })
       let binary = ''
       for (let offset = 0; offset < bytes.length; offset += 8192) {
         binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192))

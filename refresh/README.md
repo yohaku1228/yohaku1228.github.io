@@ -1,5 +1,7 @@
 # 家計とカード Phase 1
 
+Cloudflareの公開版の構成と手順は [Cloudflare運用](../worker/README.md) にあります。以下は端末内保存のレビュー版の説明です。
+
 iPhoneから使う家計管理のレビュー版です。既存サイトのコードと保存データには手を加えず、`refresh/` に独立したアプリを置いています。
 
 ```powershell

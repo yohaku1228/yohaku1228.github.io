@@ -43,11 +43,18 @@ self.addEventListener('fetch', event => {
 
 export function offlineBuild(): Plugin {
   let outDir: string
+  let base: string
   return {
     name: 'household-offline-shell',
     apply: 'build',
-    configResolved(config) { outDir = resolve(config.root, config.build.outDir) },
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+      base = config.base
+    },
     async closeBundle() {
+      const manifestPath = resolve(outDir, 'manifest.webmanifest')
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      await writeFile(manifestPath, JSON.stringify({ ...manifest, id: base, start_url: base, scope: base }, null, 2))
       const files = (await readdir(outDir, { recursive: true, withFileTypes: true }))
         .filter(file => file.isFile() && file.name !== 'sw.js')
         .map(file => resolve(file.parentPath, file.name).slice(outDir.length + 1).replaceAll('\\', '/'))

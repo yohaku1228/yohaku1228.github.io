@@ -1,10 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { pullLedger, supabase } from './cloud'
+import { cloudEnabled, currentOwner, login, logout, pullLedger } from './cloud'
 import { backup, download, existingDeviceLedger, useLedger } from './storage'
-import { Field, form, Panel, str } from './ui'
+import { Field, form, Panel } from './ui'
 
 export function CloudGate({ children }: { children: ReactNode }) {
-  const client = supabase
   const [owner, setOwner] = useState<string | null | undefined>(undefined)
   const [loaded, setLoaded] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -19,13 +18,16 @@ export function CloudGate({ children }: { children: ReactNode }) {
   }, [status])
 
   useEffect(() => {
-    if (!supabase) return
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setOwner(session?.user.id ?? null))
-    return () => data.subscription.unsubscribe()
-  }, [])
+    if (!cloudEnabled || owner !== undefined) return
+    let active = true
+    void currentOwner().then(value => { if (active) setOwner(value) }).catch(error => {
+      if (active) setMessage(error instanceof Error ? error.message : '接続できませんでした。')
+    })
+    return () => { active = false }
+  }, [owner, version])
 
   useEffect(() => {
-    if (!supabase) return
+    if (!cloudEnabled) return
     let active = true
     setLoaded(null)
     setCanImport(false)
@@ -43,7 +45,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [owner, version])
 
-  if (!client) return children
+  if (!cloudEnabled) return children
   if (owner && loaded === owner) return <>
     <aside className="cloud-bar">
       <span role="status">{status === 'saving' ? 'クラウドへ保存中…' : status === 'ready' ? 'クラウド保存' : '未送信の変更あり'}</span>
@@ -61,8 +63,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
         }
       }}>この端末のデータを取り込む</button>}
       <button className="quiet" disabled={status === 'saving'} onClick={async () => {
-        const result = await client.auth.signOut({ scope: 'local' })
-        if (result.error) useLedger.getState().report('ログアウトできませんでした。')
+        try { await logout(); setOwner(null); setMessage('') }
+        catch { useLedger.getState().report('ログアウトできませんでした。') }
       }}>ログアウト</button>
     </aside>
     {children}
@@ -74,19 +76,17 @@ export function CloudGate({ children }: { children: ReactNode }) {
         setLoading(true)
         setMessage('')
         try {
-          const result = await client.auth.signInWithPassword({ email: str(fields, 'email'), password: String(fields.get('password') ?? '') })
-          if (result.error) setMessage('ログインできません。メールアドレスとパスワードを確認してください。')
-        } catch { setMessage('接続できませんでした。通信を確認してください。') }
+          setOwner(await login(String(fields.get('password') ?? '')))
+        } catch (error) { setMessage(error instanceof Error ? error.message : '接続できませんでした。') }
         finally { setLoading(false) }
       })}>
         <div className="fields">
-          <Field label="メールアドレス"><input name="email" type="email" autoComplete="username" required /></Field>
           <Field label="パスワード"><input name="password" type="password" autoComplete="current-password" required /></Field>
         </div>
         <button className="primary" disabled={loading}>ログイン</button>
       </form>}
       {message && <p className="notice" role="alert">{message}</p>}
-      {owner && message && <button className="quiet" onClick={() => { setMessage(''); reload(v => v + 1) }}>再試行</button>}
+      {owner !== null && message && <button className="quiet" onClick={() => { setMessage(''); reload(v => v + 1) }}>再試行</button>}
     </Panel>
   </main>
 }
