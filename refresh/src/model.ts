@@ -35,6 +35,7 @@ export interface SavingsGoal { id: Id; name: string; target: Yen }
 export interface AnnualBudget {
   id: Id; label: string; kind: 'income' | 'expense' | 'asset'
   amount: Yen; endYear?: number; accountId: Id
+  schedule?: { kind: 'monthly' | 'even' } | { kind: 'yearly'; month: number } | { kind: 'cycle'; nextMonth?: Month; interval: number }
 }
 export interface AnnualActual { id: Id; planId: Id; date: Day; amount: Yen }
 export interface FinancialMilestone { id: Id; label: string; month: Month | null; fixedExpenseId?: Id; annualBudgetId?: Id }

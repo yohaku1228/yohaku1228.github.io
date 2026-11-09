@@ -1,4 +1,4 @@
-import type { Account, Budget, Day, Ledger, Month, PaymentMethod, Transaction, Yen } from './model.ts'
+import type { Account, AnnualBudget, Budget, Day, Ledger, Month, PaymentMethod, Transaction, Yen } from './model.ts'
 
 export const sum = (values: number[]) => values.reduce((total, value) => total + value, 0)
 export const yen = (value: Yen) => `${value.toLocaleString('ja-JP')}円`
@@ -8,6 +8,7 @@ export const today = () => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 export const monthOf = (date: Day) => date.slice(0, 7)
+export const monthIndex = (month: Month) => Number(month.slice(0, 4)) * 12 + Number(month.slice(5)) - 1
 export function addMonths(month: Month, change: number): Month {
   const [year, number] = month.split('-').map(Number)
   const date = new Date(Date.UTC(year, number - 1 + change, 1))
@@ -68,11 +69,31 @@ export function monthly(data: Ledger, month: Month) {
   }
 }
 
+export function annualScheduledAmount(plan: AnnualBudget, month: Month): Yen {
+  const rule = plan.schedule
+  if (!rule || (plan.endYear && Number(month.slice(0, 4)) > plan.endYear)) return 0
+  const number = Number(month.slice(5))
+  if (rule.kind === 'yearly') return number === rule.month ? plan.amount : 0
+  if (rule.kind === 'cycle') {
+    if (!rule.nextMonth || month < rule.nextMonth) return 0
+    return (monthIndex(month) - monthIndex(rule.nextMonth)) % rule.interval === 0 ? plan.amount : 0
+  }
+  if (rule.kind === 'even' && number % 2 !== 0) return 0
+  const count = rule.kind === 'even' ? 6 : 12
+  const position = rule.kind === 'even' ? number / 2 : number
+  return Math.floor(plan.amount * position / count) - Math.floor(plan.amount * (position - 1) / count)
+}
+
+export function annualPlanAmount(plan: AnnualBudget, year: number): Yen {
+  if (plan.schedule?.kind !== 'cycle') return plan.amount
+  return sum(Array.from({ length: 12 }, (_, i) => annualScheduledAmount(plan, `${year}-${pad(i + 1)}`)))
+}
+
 export function annualSummary(data: Ledger, year: number) {
   const plans = data.annual.filter(p => !p.endYear || year <= p.endYear)
-  const income = sum(plans.filter(p => p.kind === 'income').map(p => p.amount))
-  const outflow = sum(plans.filter(p => p.kind !== 'income').map(p => p.amount))
-  const asset = sum(plans.filter(p => p.kind === 'asset').map(p => p.amount))
+  const income = sum(plans.filter(p => p.kind === 'income').map(p => annualPlanAmount(p, year)))
+  const outflow = sum(plans.filter(p => p.kind !== 'income').map(p => annualPlanAmount(p, year)))
+  const asset = sum(plans.filter(p => p.kind === 'asset').map(p => annualPlanAmount(p, year)))
   const actuals = data.annualActuals.filter(a => a.date.startsWith(String(year)))
   const actual = (kind: 'income' | 'outflow') => sum(actuals.filter(a => {
     const plan = data.annual.find(p => p.id === a.planId)
@@ -131,6 +152,29 @@ export function cashEvents(data: Ledger, month: Month): CashEvent[] {
     events.push({ id: actual.id, label: plan.label, accountId: plan.accountId, date: actual.date, amount: plan.kind === 'income' ? actual.amount : -actual.amount, paid: true })
   }
   return events.sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.amount - b.amount)
+}
+
+export function subAccountForecast(data: Ledger, start: Month, length = 24) {
+  const opening = data.accounts.find(a => a.id === 'annual')?.openingBalances[start]
+  let running = 0
+  let minimum = 0
+  const months = Array.from({ length }, (_, index) => {
+    const month = addMonths(start, index)
+    const actualOrPlanned = cashEvents(data, month).filter(event => event.accountId === 'annual' && event.date)
+    const scheduled = data.annual.filter(plan => plan.accountId === 'annual').map(plan => {
+      const actual = sum(data.annualActuals.filter(row => row.planId === plan.id &&
+        (plan.schedule?.kind === 'yearly' ? row.date.slice(0, 4) === month.slice(0, 4) : monthOf(row.date) === month)).map(row => row.amount))
+      const left = Math.max(0, annualScheduledAmount(plan, month) - actual)
+      return plan.kind === 'income' ? left : -left
+    })
+    const values = [...actualOrPlanned.map(event => event.amount), ...scheduled]
+    const income = sum(values.filter(value => value > 0))
+    const expense = -sum(values.filter(value => value < 0))
+    minimum = Math.min(minimum, running - expense)
+    running += income - expense
+    return { month, income, expense, closing: opening === undefined ? null : opening + running }
+  })
+  return { months, opening, required: -minimum, shortage: opening === undefined ? null : Math.max(0, -minimum - opening) }
 }
 
 export function accountProjection(account: Account, events: CashEvent[], month: Month) {

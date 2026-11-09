@@ -18,7 +18,14 @@ const fixed = z.object({
   id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(),
   startMonth: z.union([month, z.literal('')]), endMonth: month.nullable(), kind: z.enum(['expense', 'asset']),
 }).refine(item => !item.endMonth || item.endMonth >= item.startMonth)
-const annual = z.object({ id, label, amount, accountId: id, kind: z.enum(['income', 'expense', 'asset']), endYear: z.int().min(2000).max(2099).optional() })
+const annual = z.object({
+  id, label, amount, accountId: id, kind: z.enum(['income', 'expense', 'asset']), endYear: z.int().min(2000).max(2099).optional(),
+  schedule: z.discriminatedUnion('kind', [
+    z.object({ kind: z.enum(['monthly', 'even']) }),
+    z.object({ kind: z.literal('yearly'), month: z.int().min(1).max(12) }),
+    z.object({ kind: z.literal('cycle'), nextMonth: month.optional(), interval: z.int().min(2).max(60) }),
+  ]).optional(),
+})
 const milestone = z.object({ id, label, month: month.nullable(), fixedExpenseId: id.optional(), annualBudgetId: id.optional() })
 const records = <T extends { id: string }>(schema: z.ZodType<T>) => z.array(schema)
   .refine(rows => new Set(rows.map(row => row.id)).size === rows.length)

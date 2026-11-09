@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly } from './finance.ts'
+import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly, subAccountForecast } from './finance.ts'
 import { starter } from './seed.ts'
 import type { Transaction } from './model.ts'
 
@@ -80,4 +80,24 @@ test('月をまたぐ週を月ごとに分けて、月間食費と一致する',
   const weeks = [1, 7, 14, 21, 28].map(day => foodWeek(ledger, '2026-12', `2026-12-${String(day).padStart(2, '0')}`))
   assert.equal(weeks.at(-1)?.endDate, '2026-12-31')
   assert.equal(weeks.reduce((total, week) => total + week.allocated, 0), 10_000)
+})
+
+test('偶数月の入金、毎月の積立、24か月ごとの費用を織り込み、実績を二重計上しない', () => {
+  const ledger = starter()
+  ledger.accounts[1].openingBalances['2026-01'] = 30_000
+  ledger.annual = [
+    { id: 'benefit', label: '手当', kind: 'income', amount: 180_000, accountId: 'annual', schedule: { kind: 'even' } },
+    { id: 'asset', label: '積立', kind: 'asset', amount: 120_000, accountId: 'annual', schedule: { kind: 'monthly' } },
+    { id: 'inspection', label: '点検', kind: 'expense', amount: 40_000, accountId: 'annual', schedule: { kind: 'cycle', interval: 24, nextMonth: '2026-03' } },
+  ]
+  ledger.annualActuals = [{ id: 'actual', planId: 'benefit', date: '2026-02-10', amount: 30_000 }]
+  const forecast = subAccountForecast(ledger, '2026-01', 3)
+  assert.deepEqual(forecast.months.map(m => [m.income, m.expense, m.closing]), [
+    [0, 10_000, 20_000], [30_000, 10_000, 40_000], [0, 50_000, -10_000],
+  ])
+  assert.equal(forecast.required, 40_000)
+  assert.equal(forecast.shortage, 10_000)
+  assert.equal(annualSummary(ledger, 2026).outflow, 160_000)
+  assert.equal(annualSummary(ledger, 2027).outflow, 120_000)
+  assert.equal(annualSummary(ledger, 2028).outflow, 160_000)
 })

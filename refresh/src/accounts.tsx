@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, monthOf, onDay, sum, today, yen } from './finance'
-import type { AnnualBudget, Ledger, Month, PaymentMethod, Transfer } from './model'
+import { accountProjection, activeFixed, cardBills, cashEvents, monthOf, onDay, today, yen } from './finance'
+import type { Ledger, Month, PaymentMethod, Transfer } from './model'
+import { SubAccount } from './sub-account'
 import { Amount, Field, form, Money, num, Panel, Stat, str, uid, type Save } from './ui'
 
-export function Accounts({ data, month, save }: { data: Ledger; month: Month; save: Save }) {
-  const [mode, setMode] = useState<'month' | 'year'>('month')
+export type AccountView = 'month' | 'year' | 'setup'
+export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; month: Month; save: Save; mode: AccountView; setMode: (mode: AccountView) => void }) {
   const [cardId, editCard] = useState<string | null>(null)
   const [transferVersion, bump] = useState(0)
   const card = data.payments.find(p => p.id === cardId)
@@ -15,8 +16,9 @@ export function Accounts({ data, month, save }: { data: Ledger; month: Month; sa
     save(old => ({ ...old, settled: old.settled.includes(id) ? old.settled.filter(s => s !== id) : [...old.settled, id] }))
   }
   return <div className="stack">
-    <div className="actions"><button className={mode === 'month' ? 'primary' : 'quiet'} onClick={() => setMode('month')}>月次の資金繰り</button><button className={mode === 'year' ? 'primary' : 'quiet'} onClick={() => setMode('year')}>サブ口座の年間計画</button></div>
-    {mode === 'year' ? <Annual data={data} month={month} save={save} /> : <>
+    <div className="actions"><button className={mode === 'month' ? 'primary' : 'quiet'} onClick={() => setMode('month')}>月次の資金繰り</button><button className={mode === 'year' ? 'primary' : 'quiet'} onClick={() => setMode('year')}>サブ口座</button><button className={mode === 'setup' ? 'primary' : 'quiet'} onClick={() => setMode('setup')}>引落口座の設定</button></div>
+    {mode === 'year' ? <SubAccount data={data} month={month} save={save} /> : <>
+      {mode === 'month' && <>
       <Panel title="口座別の資金繰り" description="月初残高から日付順に入出金を予測します。同じ日の出金は入金より先に計算します。日付未定の支払いは予測残高に含めず、別に表示します。">
         <div className="account-grid">{data.accounts.map(account => {
           const projection = accountProjection(account, events, month)
@@ -57,10 +59,18 @@ export function Accounts({ data, month, save }: { data: Ledger; month: Month; sa
           </li>
         })}</ul>
         {!bills.length && <p className="empty">カード利用を登録すると、ここに引落予定が表示されます。</p>}
-        <details><summary>カードの追加・締め日設定</summary>
-          <div className="actions">{data.payments.filter(p => p.kind === 'card').map(p => <button className="quiet" key={p.id} onClick={() => editCard(p.id)}>{p.name}を編集</button>)}</div>
+      </Panel>
+      </>}
+      {mode === 'setup' && <>
+        <Panel title="カードの引落口座" description="カードを選ぶと、口座・締め日・引落日を設定できます。">
+          <ul className="rows">{data.payments.filter(p => p.kind === 'card').map(p => <li key={p.id}>
+            <span><b>{p.name}</b><small>{data.accounts.find(a => a.id === p.accountId)?.name} ・ {p.debitDay}日引落</small></span>
+            <button className="quiet" onClick={() => editCard(p.id)}>{p.name}を編集</button>
+          </li>)}</ul>
+          <div className="actions"><button className="quiet" onClick={() => editCard('new')}>＋ カードを追加</button></div>
+          {cardId && <>
           <form key={cardId ?? 'new'} onSubmit={form(fields => {
-            const record: PaymentMethod = { id: cardId ?? uid(), kind: 'card', name: str(fields, 'name'), accountId: str(fields, 'account'),
+            const record: PaymentMethod = { id: card?.id ?? uid(), kind: 'card', name: str(fields, 'name'), accountId: str(fields, 'account'),
               closingDay: num(fields, 'closing'), debitDay: num(fields, 'debit'), debitLag: num(fields, 'lag') }
             if (save(old => {
               if (card && card.accountId !== record.accountId && old.transactions.some(t => t.paymentId === card.id)) {
@@ -77,10 +87,20 @@ export function Accounts({ data, month, save }: { data: Ledger; month: Month; sa
               <Field label="引落口座"><select name="account" defaultValue={card?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
             </div>
             <p className="hint">31日は月末扱いです。休日の繰り延べは金融機関の明細で確認してください。</p>
-            <div className="actions"><button className="primary">{card ? '設定を更新' : 'カードを追加'}</button>{card && <button type="button" className="quiet" onClick={() => editCard(null)}>取消</button>}</div>
+            <div className="actions"><button className="primary">{card ? '設定を更新' : 'カードを追加'}</button><button type="button" className="quiet" onClick={() => editCard(null)}>取消</button></div>
           </form>
-        </details>
-      </Panel>
+          </>}
+        </Panel>
+        <Panel title="固定費の引落口座" description="項目ごとに支払い元を選びます。カード明細と紐づけた支払いは、カードの引落口座で集計します。">
+          {data.fixed.length ? <div className="fields">{data.fixed.map(item => <Field key={item.id} label={item.name + 'の引落口座'}>
+            <select value={item.accountId} onChange={event => {
+              const accountId = event.target.value
+              save(old => ({ ...old, fixed: old.fixed.map(row => row.id === item.id ? { ...row, accountId } : row) }))
+            }}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+          </Field>)}</div> : <p className="empty">固定費は下の「予算」から追加できます。</p>}
+        </Panel>
+      </>}
+      {mode === 'month' && <>
       <Panel title="固定費の支払確認">
         <ul className="rows">{fixed.map(item => {
           const id = `fixed:${item.id}:${month}`
@@ -108,45 +128,7 @@ export function Accounts({ data, month, save }: { data: Ledger; month: Month; sa
         </form>
         <ul className="rows">{data.transfers.filter(t => monthOf(t.date) === month).map(t => <li key={t.id}><span><b>{data.accounts.find(a => a.id === t.from)?.name} → {data.accounts.find(a => a.id === t.to)?.name}</b><small>{t.date} ・ {t.purpose === 'savings' ? '貯蓄' : t.purpose === 'withdrawal' ? '取り崩し' : '振込'}</small></span><Amount value={t.amount} /><label className="check"><input type="checkbox" checked={t.completed} onChange={() => save(old => ({ ...old, transfers: old.transfers.map(row => row.id === t.id ? { ...row, completed: !row.completed } : row) }))} /> 振込済み</label></li>)}</ul>
       </Panel>
+      </>}
     </>}
-  </div>
-}
-
-function Annual({ data, month, save }: { data: Ledger; month: Month; save: Save }) {
-  const year = Number(month.slice(0, 4))
-  const annual = annualSummary(data, year)
-  const [editing, edit] = useState<string | null>(null)
-  const plan = data.annual.find(p => p.id === editing)
-  return <div className="stack">
-    <div className="stats"><Stat label="年間収入予定" value={annual.income} /><Stat label="年間確保額" value={annual.outflow} detail={`うち資産形成 ${yen(annual.asset)}`} /><Stat label="年間黒字見込み" value={annual.surplus} /><Stat label="年間実績差額" value={annual.actualIncome - annual.actualOutflow} /></div>
-    <Panel title={year + '年の入出金計画'} description="年間の予定額と実際の入出金を別々に記録します。">
-      <ul className="rows">{annual.plans.map(p => <li key={p.id}><span><b>{p.label}</b><small>{p.kind === 'asset' ? '資産形成 ・ ' : p.kind === 'income' ? '収入 ・ ' : ''}実績 {yen(sum(data.annualActuals.filter(a => a.planId === p.id && a.date.startsWith(String(year))).map(a => a.amount)))}</small></span><Amount value={p.amount} /><button className="quiet" onClick={() => edit(p.id)}>編集</button></li>)}</ul>
-      <form key={editing ?? 'new'} onSubmit={form(fields => {
-        const item: AnnualBudget = {
-          id: editing ?? uid(), label: str(fields, 'label'), kind: str(fields, 'kind') as AnnualBudget['kind'],
-          amount: num(fields, 'amount'), accountId: 'annual', endYear: str(fields, 'end') ? num(fields, 'end') : undefined,
-        }
-        if (save(old => ({ ...old, annual: [...old.annual.filter(p => p.id !== item.id), item] }))) edit(null)
-      })}>
-        <div className="fields">
-          <Field label="項目"><input name="label" defaultValue={plan?.label} required maxLength={100} /></Field>
-          <Field label="年間金額"><Money name="amount" value={plan?.amount} /></Field>
-          <Field label="区分"><select name="kind" defaultValue={plan?.kind ?? 'expense'}><option value="expense">支出</option><option value="income">収入</option><option value="asset">資産形成</option></select></Field>
-          <Field label="終了年（任意）"><input name="end" type="number" min="2000" max="2099" defaultValue={plan?.endYear} /></Field>
-        </div><div className="actions"><button className="primary">{plan ? '予定を更新' : '予定を追加'}</button>{plan && <button type="button" className="quiet" onClick={() => edit(null)}>取消</button>}</div>
-      </form>
-    </Panel>
-    {annual.plans.length > 0 && <Panel title="実際の入出金">
-      <form key={month + data.annualActuals.length} onSubmit={form(fields => save(old => ({
-        ...old, annualActuals: [...old.annualActuals, { id: uid(), planId: str(fields, 'plan'), date: str(fields, 'date'), amount: num(fields, 'amount') }],
-      })))}>
-        <div className="fields"><Field label="項目"><select name="plan">{annual.plans.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></Field>
-          <Field label="日付"><input type="date" name="date" defaultValue={onDay(month, 1)} min={`${year}-01-01`} max={`${year}-12-31`} required /></Field><Field label="実額"><Money name="amount" /></Field></div>
-        <div className="actions"><button className="primary">実績を登録</button></div>
-      </form>
-      <ul className="rows">{data.annualActuals.filter(a => a.date.startsWith(String(year))).map(a => <li key={a.id}><span><b>{data.annual.find(p => p.id === a.planId)?.label}</b><small>{a.date}</small></span><Amount value={a.amount} /><button className="quiet negative" onClick={() => {
-        if (window.confirm('この実績を削除しますか？')) save(old => ({ ...old, annualActuals: old.annualActuals.filter(row => row.id !== a.id) }))
-      }}>削除</button></li>)}</ul>
-    </Panel>}
   </div>
 }
