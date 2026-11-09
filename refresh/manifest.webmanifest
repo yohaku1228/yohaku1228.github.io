@@ -1,0 +1,15 @@
+{
+  "id": "/refresh/",
+  "name": "家計とカード",
+  "short_name": "家計とカード",
+  "lang": "ja",
+  "start_url": "/refresh/",
+  "scope": "/refresh/",
+  "display": "standalone",
+  "theme_color": "#eff4ef",
+  "background_color": "#eff4ef",
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
