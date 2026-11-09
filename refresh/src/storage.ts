@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { daysInMonth, monthOf } from './finance'
 import type { Ledger, Plan } from './model'
 import { starter } from './seed'
+import { pushLedger, supabase } from './cloud'
 
 const id = z.string().min(1).max(200)
 const label = z.string().trim().min(1).max(200)
@@ -143,24 +144,82 @@ interface Store {
   error: string
   update(action: (previous: Ledger) => Ledger): boolean
   report(error: string): void
+  cloudStatus: 'local' | 'ready' | 'saving' | 'error' | 'conflict'
+  startCloud(owner: string, row: { ledger: unknown; revision: number } | null): void
+  stopCloud(): void
+  retryCloud(): void
 }
 
-export const useLedger = create<Store>(set => {
+export function existingDeviceLedger(): Ledger | null {
+  try { return repository.read()?.ledger ?? null } catch { return null }
+}
+
+export const useLedger = create<Store>((set, get) => {
   let initial: ReturnType<LedgerRepository['read']> = null
   let readError = ''
-  try { initial = repository.read() } catch {
+  try { if (!supabase) initial = repository.read() } catch {
     readError = '保存データを読み込めませんでした。既存の保存データを保護するため、編集を停止しました。'
   }
   let ledger = initial?.ledger ?? starter()
   let revision = initial?.revision ?? null
+  let cloud: { key: string; revision: number; pending: Ledger | null } | null = null
+  async function flush() {
+    const active = cloud
+    if (!active?.pending || get().cloudStatus === 'saving' || get().cloudStatus === 'conflict') return
+    set({ cloudStatus: 'saving', error: '' })
+    try {
+      const next = await pushLedger(active.revision, active.pending)
+      if (cloud !== active) return
+      if (next === null) {
+        set({ cloudStatus: 'conflict', error: '別の端末で更新されました。この端末の変更は未送信です。設定からJSONに保存してから、別の端末の内容を確認してください。' })
+        return
+      }
+      active.revision = next
+      active.pending = null
+      localStorage.removeItem(active.key)
+      set({ cloudStatus: 'ready' })
+    } catch {
+      if (cloud === active) set({ cloudStatus: 'error', error: 'クラウドに未保存です。通信を確認して再送してください。入力はこの端末に一時保管しています。' })
+    }
+  }
   return {
     ledger,
     error: readError,
+    cloudStatus: 'local',
     report: error => set({ error }),
+    startCloud(owner, row) {
+      const key = 'household-pwa:pending:' + owner
+      const raw = localStorage.getItem(key)
+      const pending = raw ? z.object({ revision: z.int().nonnegative(), ledger: ledgerSchema }).parse(JSON.parse(raw)) : null
+      const remoteRevision = row?.revision ?? 0
+      const base = row ? ledgerSchema.parse(row.ledger) : starter()
+      cloud = { key, revision: remoteRevision, pending: pending?.ledger ?? null }
+      ledger = pending?.ledger ?? base
+      const conflict = pending !== null && pending.revision !== remoteRevision
+      set({ ledger, cloudStatus: conflict ? 'conflict' : pending ? 'error' : 'ready',
+        error: conflict ? '未送信の変更とクラウドの内容が異なります。設定から未送信のデータをJSONに保存してください。' : '' })
+    },
+    stopCloud() {
+      cloud = null
+      ledger = starter()
+      set({ ledger, cloudStatus: 'local', error: '' })
+    },
+    retryCloud() { void flush() },
     update(action) {
       try {
+        if (supabase && !cloud) throw new Error('家計を読み込み直してください。')
+        if (cloud && get().cloudStatus !== 'ready') throw new Error('先に未送信の変更を確認してください。')
         if (readError) throw new Error(readError)
         const next = action(ledger)
+        if (cloud) {
+          if (!ledgerSchema.safeParse(next).success) throw new Error('日付・金額・設定を確認してください。')
+          localStorage.setItem(cloud.key, JSON.stringify({ revision: cloud.revision, ledger: next }))
+          cloud.pending = next
+          ledger = next
+          set({ ledger })
+          void flush()
+          return true
+        }
         revision = repository.write(next, revision)
         ledger = next
         set({ ledger, error: '' })

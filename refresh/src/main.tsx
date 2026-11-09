@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CirclePlus, Ellipsis, House, Settings2, Wallet } from 'lucide-react'
 import { Accounts, type AccountView } from './accounts'
+import { CloudGate } from './cloud-gate'
+import { supabase } from './cloud'
 import { accountProjection, addMonths, annualSummary, cardBills, cashEvents, foodWeek, monthly, monthOf, subAccountForecast, today, yen } from './finance'
 import { Planning } from './planning'
 import { Calendar, Records } from './records'
@@ -87,7 +89,7 @@ function App() {
   }
   const nav = tabs.some(t => t.id === view) ? view : 'more'
   return <>
-    <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div><span className="local"><i /> 端末に保存</span></div></header>
+    <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!supabase && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
       <div className="page-head">
         <div><span className="eyebrow">ふたりの家計</span><h1>{titles[view]}</h1></div>
@@ -117,7 +119,7 @@ function App() {
   </>
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(<CloudGate><App /></CloudGate>)
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(error => {

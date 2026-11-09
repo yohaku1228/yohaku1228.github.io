@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
+import { supabase } from './cloud'
+import { ReceiptReader, type ReceiptScan } from './receipt'
 
 function billId(data: Ledger, transaction: Transaction) {
   const payment = data.payments.find(p => p.id === transaction.paymentId)
   return payment?.kind === 'card' ? `card:${payment.id}:${debitDate(transaction, payment)}` : ''
 }
 
-function PurchaseLines({ categories, items }: { categories: Ledger['categories']; items: TransactionItem[] }) {
-  const [lines, setLines] = useState<{ id: string; item?: TransactionItem }[]>(() => items.length
+type DraftItem = Omit<TransactionItem, 'amount'> & { amount: number | null }
+function PurchaseLines({ categories, items }: { categories: Ledger['categories']; items: DraftItem[] }) {
+  const [lines, setLines] = useState<{ id: string; item?: DraftItem }[]>(() => items.length
     ? items.map(item => ({ id: item.id, item }))
     : [{ id: uid(), item: undefined }])
 
@@ -35,18 +38,33 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
   setEditing: (id: string | null) => void; setMonth: (month: Month) => void
 }) {
   const [formVersion, setFormVersion] = useState(0)
+  const [scan, setScan] = useState<ReceiptScan | null>(null)
+  const inputDirty = useRef(false)
   const current = data.transactions.find(t => t.id === editing)
+  const draft = current ? null : scan
   const rows = data.transactions.filter(t => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date))
   function remove(transaction: Transaction) {
     if (!window.confirm('この支出記録を削除しますか？')) return
     save(old => {
       if (old.settled.includes(billId(old, transaction))) throw new Error('引落済みです。口座画面で確認を外してから編集してください。')
-      return { ...old, transactions: old.transactions.filter(t => t.id !== transaction.id) }
+      const transactions = old.transactions.filter(t => t.id !== transaction.id)
+      const receipts = transaction.receiptId && !transactions.some(t => t.receiptId === transaction.receiptId)
+        ? old.receipts.filter(receipt => receipt.id !== transaction.receiptId) : old.receipts
+      return { ...old, transactions, receipts }
     })
   }
   return <div className="stack">
+    {supabase && !current && <Panel title="レシートを読み取る">
+      <ReceiptReader seen={fingerprint => data.receipts.some(receipt => receipt.fingerprint === fingerprint)} onRead={read => {
+        if (inputDirty.current && !window.confirm('入力中の内容を読み取った明細に置き換えますか？')) return
+        inputDirty.current = false
+        setScan(read)
+        setFormVersion(version => version + 1)
+      }} />
+    </Panel>}
     <Panel title={current ? '支出を編集' : '支出を記録'} description="支出には購入日を使います。返金はマイナスの金額で登録できます。">
-      <form key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
+      {draft && <p className="notice">読み取った内容を確認してください。{draft.total !== null ? `レシートの合計は ${yen(draft.total)} です。` : 'レシートの合計は読み取れませんでした。'}</p>}
+      <form key={(current?.id ?? month) + formVersion} onChange={() => { inputDirty.current = true }} onSubmit={form(fields => {
         const categories = fields.getAll('category').map(String)
         const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
         const allowance = allowanceLines.length > 0
@@ -69,8 +87,10 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
           id: current?.id ?? uid(), date, merchant, paymentId, fixedExpenseId,
           memo: allowance ? '' : str(fields, 'memo'), personal: fields.has('personal') && !allowance,
           items,
-          receiptId: current?.receiptId,
+          receiptId: current?.receiptId ?? (draft ? uid() : undefined),
         }
+        if (draft?.total !== null && draft?.total !== undefined && draft.total !== transactionAmount(record) &&
+          !window.confirm(`レシートの合計 ${yen(draft.total)} と、入力した明細合計 ${yen(transactionAmount(record))} が異なります。保存しますか？`)) return
         const payment = data.payments.find(p => p.id === paymentId)
         if (payment?.kind === 'card') record.debitOn =
           current?.date === date && current.paymentId === paymentId && current.debitOn ? current.debitOn : debitDate(record, payment)
@@ -99,21 +119,29 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
           if (old.settled.includes(billId(old, record)) || (current && old.settled.includes(billId(old, current)))) {
             throw new Error('対象のカード引落は確認済みです。口座画面で引落済みを外してから編集してください。')
           }
-          return { ...old, transactions: [...old.transactions.filter(t => t.id !== record.id), record] }
+          if (draft && old.receipts.some(receipt => receipt.fingerprint === draft.fingerprint)) throw new Error('このレシート画像はすでに登録済みです。')
+          const receipts = draft && record.receiptId ? [...old.receipts, { id: record.receiptId, date, total: draft.total ?? transactionAmount(record),
+            fingerprint: draft.fingerprint, imageRefs: [] }] : old.receipts
+          return { ...old, receipts, transactions: [...old.transactions.filter(t => t.id !== record.id), record] }
         })) {
+          inputDirty.current = false
+          setScan(null)
           setEditing(null)
           setMonth(monthOf(date))
           setFormVersion(v => v + 1)
         }
       })}>
         <div className="fields">
-          <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
-          <Field label="店舗・品名"><input name="merchant" defaultValue={current?.merchant} placeholder="例：スーパー" maxLength={100} /></Field>
+          <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (draft ? draft.date ?? '' : monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
+          <Field label="店舗・品名"><input name="merchant" defaultValue={current?.merchant ?? draft?.merchant ?? ''} placeholder="例：スーパー" maxLength={100} /></Field>
           <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? 'cash'}>{data.payments.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
           {data.fixed.length > 0 && <Field label="固定費に紐づける"><select name="fixed" defaultValue={current?.fixedExpenseId ?? ''}><option value="">生活費として記録</option>{data.fixed.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
           <Field label="メモ"><input name="memo" defaultValue={current?.memo} maxLength={500} placeholder="任意" /></Field>
         </div>
-        <PurchaseLines items={current?.items ?? []} categories={data.categories} />
+        <PurchaseLines items={current?.items ?? draft?.items.map((item, index) => ({
+          id: draft.fingerprint + ':' + index, name: item.name, amount: item.amount,
+          discount: Math.max(0, item.discount ?? 0), categoryId: 'food', quantity: 1,
+        })) ?? []} categories={data.categories} />
         <label className="check"><input type="checkbox" name="personal" defaultChecked={current?.personal} /> 個人の買い物として生活費から除外</label>
         <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}</div>
       </form>

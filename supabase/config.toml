@@ -1,0 +1,2 @@
+[functions.receipt]
+verify_jwt = false
