@@ -60,7 +60,7 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
             </form>
           </div>
         })}</div>
-        {data.incomes.some(i => monthOf(i.date) === month && (i.route === 'direct' || i.route === 'undecided')) && <p className="notice">口座残高に反映していない収入があります。「予算」の「収入」で入金先を確認できます。</p>}
+        {data.incomes.some(i => monthOf(i.date) === month && (i.route === 'direct' || i.route === 'undecided')) && <p className="notice">口座残高に反映していない収入があります。下の「収入」で入金先を確認できます。</p>}
       </Panel>
       <Panel title="カード別の引落予定" description="カード利用は利用月の生活費、引落は引落月の口座資金として集計します。">
         <ul className="rows">{bills.map(bill => {

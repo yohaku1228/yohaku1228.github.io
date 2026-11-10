@@ -15,12 +15,12 @@ import './style.css'
 
 const tabs = [
   { id: 'home', name: 'ホーム', icon: House },
-  { id: 'planning', name: '予算', icon: Wallet },
+  { id: 'planning', name: '収入', icon: Wallet },
   { id: 'receipt', name: cloudEnabled ? 'レシート' : '記録', icon: cloudEnabled ? ScanLine : PencilLine },
-  { id: 'calendar', name: 'カレンダー', icon: CalendarDays },
+  { id: 'records', name: '支出', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
-type View = typeof tabs[number]['id'] | 'records' | 'accounts' | 'analysis' | 'settings'
+type View = typeof tabs[number]['id'] | 'calendar' | 'accounts' | 'analysis' | 'settings'
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '今月の予算を決める', records: '支出を記録', receipt: 'レシート読み取り',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
@@ -108,7 +108,7 @@ function App() {
     setAccountMode(mode)
     go('accounts')
   }
-  const nav = view === 'records' ? (cloudEnabled ? null : 'receipt') : tabs.some(t => t.id === view) ? view : 'more'
+  const nav = tabs.some(t => t.id === view) ? view : 'more'
   return <>
     <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
@@ -121,6 +121,9 @@ function App() {
       <ErrorNotice />
       {view === 'home' && <Home key={month} data={data} month={month} go={go} openPayments={() => openAccount('payments')} />}
       {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section={planningView} setSection={setPlanningView} />}
+      {view === 'records' && <div className="actions">
+        <button className="quiet" onClick={() => openAccount('payments')}><CreditCard size={17} /> 銀行別の引落・現金支払い</button>
+      </div>}
       {(view === 'records' || view === 'receipt') && <Records key={view} mode={view === 'receipt' ? 'scan' : 'manual'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} onManual={() => go('records')} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
