@@ -50,6 +50,11 @@ export async function readReceipt(image: Blob, signal: AbortSignal) {
   const response = await request('receipt', {
     method: 'POST', signal, headers: { 'Content-Type': 'image/jpeg' }, body: image,
   })
-  if (!response.ok) throw new Error(await message(response, 'レシートを読み取れませんでした。'))
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    const detail = typeof body?.error === 'string' ? body.error : 'レシートを読み取れませんでした。'
+    const code = typeof body?.code === 'string' && /^[a-z0-9_]{1,48}$/.test(body.code) ? body.code : 'http_' + response.status
+    throw new Error(detail + '（エラーコード ' + code + '）')
+  }
   return response.json() as Promise<unknown>
 }
