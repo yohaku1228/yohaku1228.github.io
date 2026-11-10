@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
-import { cloudEnabled } from './cloud'
 import { ReceiptReader, type ReceiptScan } from './receipt'
 
 function billId(data: Ledger, transaction: Transaction) {
@@ -33,13 +32,14 @@ function PurchaseLines({ categories, items }: { categories: Ledger['categories']
   </div>
 }
 
-export function Records({ data, month, save, editing, setEditing, setMonth }: {
-  data: Ledger; month: Month; save: Save; editing: string | null
-  setEditing: (id: string | null) => void; setMonth: (month: Month) => void
+export function Records({ data, month, save, mode, editing, setEditing, setMonth, onManual }: {
+  data: Ledger; month: Month; save: Save; mode: 'manual' | 'scan'; editing: string | null
+  setEditing: (id: string | null) => void; setMonth: (month: Month) => void; onManual: () => void
 }) {
   const [formVersion, setFormVersion] = useState(0)
   const [scan, setScan] = useState<ReceiptScan | null>(null)
-  const inputDirty = useRef(false)
+  const [scanSaved, setScanSaved] = useState(false)
+  const review = useRef<HTMLHeadingElement>(null)
   const current = data.transactions.find(t => t.id === editing)
   const draft = current ? null : scan
   const rows = data.transactions.filter(t => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date))
@@ -54,17 +54,20 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
     })
   }
   return <div className="stack">
-    {cloudEnabled && !current && <Panel title="レシートを読み取る">
+    {mode === 'scan' && !draft && <Panel title="写真から支出を登録" description="レシートを撮るか、写真やスクリーンショットを選んでください。">
+      {scanSaved && <p className="scan-success" role="status">支出を登録しました。続けて次のレシートを読み取れます。</p>}
       <ReceiptReader seen={fingerprint => data.receipts.some(receipt => receipt.fingerprint === fingerprint)} onRead={read => {
-        if (inputDirty.current && !window.confirm('入力中の内容を読み取った明細に置き換えますか？')) return
-        inputDirty.current = false
         setScan(read)
         setFormVersion(version => version + 1)
+        requestAnimationFrame(() => review.current?.focus())
       }} />
+      <div className="actions"><button className="quiet" onClick={onManual}>支出の手入力・履歴へ</button></div>
     </Panel>}
-    <Panel title={current ? '支出を編集' : '支出を記録'} description="支出には購入日を使います。返金はマイナスの金額で登録できます。">
+    {(mode === 'manual' || draft) && <section className="panel">
+      <h2 ref={review} tabIndex={-1}>{draft ? '読み取った明細を確認' : current ? '支出を編集' : '支出を手入力'}</h2>
+      {!draft && <p className="hint">支出には購入日を使います。返金はマイナスの金額で登録できます。</p>}
       {draft && <p className="notice">読み取った内容を確認してください。{draft.total !== null ? `レシートの合計は ${yen(draft.total)} です。` : 'レシートの合計は読み取れませんでした。'}</p>}
-      <form key={(current?.id ?? month) + formVersion} onChange={() => { inputDirty.current = true }} onSubmit={form(fields => {
+      <form key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
         const categories = fields.getAll('category').map(String)
         const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
         const allowance = allowanceLines.length > 0
@@ -124,7 +127,10 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
             fingerprint: draft.fingerprint, imageRefs: [] }] : old.receipts
           return { ...old, receipts, transactions: [...old.transactions.filter(t => t.id !== record.id), record] }
         })) {
-          inputDirty.current = false
+          if (draft) {
+            setScanSaved(true)
+            window.scrollTo(0, 0)
+          }
           setScan(null)
           setEditing(null)
           setMonth(monthOf(date))
@@ -143,13 +149,20 @@ export function Records({ data, month, save, editing, setEditing, setMonth }: {
           discount: Math.max(0, item.discount ?? 0), categoryId: 'food', quantity: 1,
         })) ?? []} categories={data.categories} />
         <label className="check"><input type="checkbox" name="personal" defaultChecked={current?.personal} /> 個人の買い物として生活費から除外</label>
-        <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}</div>
+        <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}
+          {draft && <button type="button" className="quiet" onClick={() => {
+            if (window.confirm('この読み取りを取り消しますか？')) {
+              setScan(null)
+              setScanSaved(false)
+              window.scrollTo(0, 0)
+            }
+          }}>読み取りを取り消す</button>}</div>
       </form>
-    </Panel>
-    <Panel title="この月の履歴">
+    </section>}
+    {mode === 'manual' && <Panel title="この月の履歴">
       {rows.length === 0 && <p className="empty">まだ支出がありません。</p>}
       <ul className="rows">{rows.map(t => <li key={t.id}><span><b>{t.merchant}</b><small>{t.date} ・ {t.items.length > 1 ? `${t.items.length}明細` : data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span><Amount value={transactionAmount(t)} /><div className="row-actions"><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button><button className="quiet negative" onClick={() => remove(t)}>削除</button></div></li>)}</ul>
-    </Panel>
+    </Panel>}
   </div>
 }
 

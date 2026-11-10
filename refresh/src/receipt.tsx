@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import { Camera, ScanLine } from 'lucide-react'
 import { z } from 'zod'
 import { readReceipt } from './cloud'
 import { daysInMonth, monthOf } from './finance'
-import { Field } from './ui'
 
 const money = z.int().min(-1_000_000_000).max(1_000_000_000)
 const scanSchema = z.object({
@@ -44,14 +44,18 @@ export function ReceiptReader({ onRead, seen }: { onRead: (scan: ReceiptScan) =>
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const input = useRef<HTMLInputElement>(null)
-  return <div className="purchase-lines">
-    <Field label="レシート画像"><input ref={input} type="file" accept="image/*" disabled={busy} onChange={event => {
-      setFile(event.target.files?.[0] ?? null)
-      setMessage('')
-    }} /></Field>
-    <p className="hint">読み取りを押すと、画像をGeminiへ送ります。読み取った明細は保存前に編集できます。</p>
-    <button type="button" className="quiet" disabled={!file || busy} onClick={async () => {
+  return <div className="scan-flow">
+    <label className="scan-picker">
+      <input className="sr-only" aria-label="レシート画像を選ぶ" type="file" accept="image/*" disabled={busy} onChange={event => {
+        setFile(event.target.files?.[0] ?? null)
+        setMessage('')
+      }} />
+      <Camera size={25} aria-hidden="true" />
+      <strong>{file ? '別の画像を選ぶ' : '撮影・写真を選ぶ'}</strong>
+      <small>{file?.name ?? 'レシートや通販のスクリーンショット'}</small>
+    </label>
+    <p className="hint">選んだ画像は読み取り時にGeminiへ送信します。読み取った明細を確認してから保存できます。</p>
+    <button type="button" className="primary scan-submit" disabled={!file || busy} onClick={async () => {
       if (!file) return
       setBusy(true)
       setMessage('')
@@ -69,12 +73,11 @@ export function ReceiptReader({ onRead, seen }: { onRead: (scan: ReceiptScan) =>
             Number(date.slice(8)) < 1 || Number(date.slice(8)) > daysInMonth(monthOf(date)))) parsed.date = null
         onRead({ ...parsed, fingerprint })
         setFile(null)
-        if (input.current) input.current.value = ''
       } catch (error) {
         setMessage(error instanceof z.ZodError ? '明細の一部を読み取れませんでした。画像を撮り直すか手入力してください。'
           : error instanceof Error ? error.message : '読み取れませんでした。')
       } finally { setBusy(false) }
-    }}>{busy ? '読み取り中…' : 'Geminiで読み取る'}</button>
+    }}><ScanLine size={18} aria-hidden="true" />{busy ? '読み取り中…' : 'Geminiで読み取る'}</button>
     {message && <p className="notice" role="alert">{message}</p>}
   </div>
 }
