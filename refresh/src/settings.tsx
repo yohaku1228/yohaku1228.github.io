@@ -1,77 +1,13 @@
 import { useState } from 'react'
-import { addMonths, activeFixed, annualSummary, monthly, onDay, sum, yen } from './finance'
+import { addMonths, activeFixed, annualSummary, monthly, sum, yen } from './finance'
 import type { Ledger, Month } from './model'
-import { backup, download, inspectImport, useLedger } from './storage'
-import { cloudEnabled } from './cloud'
+import { useLedger } from './storage'
 import { Amount, BudgetRow, Field, form, num, Panel, Stat, str, uid, type Save } from './ui'
 
-export function Settings({ data, month, save }: { data: Ledger; month: Month; save: Save }) {
-  const [status, setStatus] = useState('')
-  const [preview, setPreview] = useState<ReturnType<typeof inspectImport> | null>(null)
+export function Settings({ data, save }: { data: Ledger; save: Save }) {
   const [editing, edit] = useState<string | null>(null)
   const category = data.categories.find(c => c.id === editing)
-  function exportLedger() {
-    download('家計とカード-バックアップ.json', JSON.stringify(backup(data), null, 2), 'application/json')
-  }
-  function exportCsv() {
-    const cell = (value: string | number) => {
-      if (typeof value === 'number') return String(value)
-      const safe = /^[\t\r\n\s]*[=+@-]/.test(value) ? "'" + value : value
-      return '"' + safe.replaceAll('"', '""') + '"'
-    }
-    const rows = data.transactions.flatMap(t => t.items.map(i => [
-      t.date, t.merchant, i.name, data.categories.find(c => c.id === i.categoryId)?.name ?? '',
-      i.quantity, i.amount, i.discount, data.payments.find(p => p.id === t.paymentId)?.name ?? '', t.personal ? '個人' : '共通', t.memo,
-    ]))
-    const csv = [['日付', '店舗', '品名', 'カテゴリー', '数量', '金額', '割引', '支払方法', '負担区分', 'メモ'], ...rows]
-    download('家計とカード-支出明細.csv', '\uFEFF' + csv.map(row => row.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8')
-  }
   return <div className="stack">
-    <Panel title="バックアップと復元" description={cloudEnabled ? 'クラウドに保存済みの家計は、別の端末からログインして開けます。' : '家計はこの端末のブラウザーに保存されます。端末を替える前は、JSONバックアップを保管してください。'}>
-      <div className="actions"><button className="primary" onClick={exportLedger}>JSONバックアップ</button><button className="quiet" onClick={exportCsv}>支出をCSV出力</button></div>
-      <Field label="バックアップ・初期設定ファイルを選ぶ"><input type="file" accept=".json,application/json" onChange={async event => {
-        const input = event.currentTarget
-        const file = input.files?.[0]
-        setPreview(null)
-        setStatus('')
-        try {
-          if (!file) return
-          if (file.size > 15_000_000) throw new Error('15MB以下のJSONファイルを選んでください。')
-          setPreview(inspectImport(JSON.parse(await file.text())))
-        } catch (error) { setStatus(error instanceof Error ? error.message : 'ファイルを読み込めません。') }
-        finally { input.value = '' }
-      }} /></Field>
-      {preview?.type === 'backup' && <div className="notice">
-        <p>家計「{preview.ledger.household.name}」 ・ 月別予算 {preview.ledger.budgets.length}件 ・ 支出 {preview.ledger.transactions.length}件</p>
-        <button className="quiet" onClick={() => {
-          if (!window.confirm('この端末の現在のデータをバックアップで置き換えますか？ 現在のデータもファイルに書き出します。')) return
-          exportLedger()
-          if (save(() => preview.ledger)) { setPreview(null); setStatus('復元しました。') }
-        }}>現在のデータを退避して復元</button>
-      </div>}
-      {preview?.type === 'plan' && <div className="notice">
-        <p>{month}の収入・負担 {yen(sum(preview.plan.incomes.map(i => i.amount)))} ・ 固定費 {yen(sum(preview.plan.fixed.map(f => f.amount)))} ・ 生活費配分 {yen(sum(Object.values(preview.plan.budget)))}</p>
-        <button className="quiet" onClick={() => {
-          const plan = preview.plan
-          if (save(old => {
-            if (old.fixed.length || old.annual.length || old.budgets.length || old.incomes.length || Object.keys(old.defaultBudget).length) {
-              throw new Error('初期設定は、給与・予算・固定費・年次計画が空のときに読み込めます。')
-            }
-            return {
-              ...old, defaultBudget: plan.budget, fixed: plan.fixed.map(f => ({
-                ...f, startMonth: f.startMonth || (f.endMonth && f.endMonth < month ? f.endMonth : month),
-              })),
-              budgets: [{ month, amounts: plan.budget, plannedSavings: 0 }], annual: plan.annual, milestones: plan.milestones,
-              incomes: plan.incomes.map(i => ({
-                id: uid(), label: (old.users.find(u => u.id === i.userId)?.name ?? '') + 'の給与・負担',
-                userId: i.userId, date: onDay(month, 25), forecast: i.amount, actual: null, route: i.route, accountId: 'main',
-              })),
-            }
-          })) { setPreview(null); setStatus('初期設定を読み込みました。') }
-        }}>この月から使う</button>
-      </div>}
-      {status && <p role="status" className="hint">{status}</p>}
-    </Panel>
     <Panel title="カテゴリーと色">
       <ul className="rows">{data.categories.map(c => <li key={c.id}><b className="category"><i style={{ background: c.color }} />{c.name}</b><button className="quiet" onClick={() => edit(c.id)}>編集</button></li>)}</ul>
       <form key={category?.id ?? data.categories.length} onSubmit={form(fields => {

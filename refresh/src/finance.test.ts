@@ -65,7 +65,12 @@ test('口座間移動と資産形成は消費額に加算されない', () => {
 
 test('固定費をカードで払った場合は登録した引落だけを資金繰りに入れる', () => {
   const ledger = starter()
-  ledger.fixed.push({ id: 'fixed', name: '通信費', amount: 3500, accountId: 'main', dueDay: 20, kind: 'expense', startMonth: '2026-12', endMonth: '2026-12' })
+  ledger.payments[2].accountId = 'annual'
+  ledger.fixed.push({ id: 'fixed', name: '通信費', amount: 3500, accountId: 'main', cardPaymentId: 'card', dueDay: null, kind: 'expense', startMonth: '2026-12', endMonth: '2026-12' })
+  const [planned] = cashEvents(ledger, '2026-12')
+  assert.equal(planned.accountId, 'annual')
+  assert.equal(planned.date, null)
+  assert.equal(planned.amount, -3500)
   ledger.transactions.push({ ...purchase, fixedExpenseId: 'fixed' })
   assert.equal(monthly(ledger, '2026-12').spent, 0)
   assert.equal(monthly(ledger, '2026-12').fixed, 3500)

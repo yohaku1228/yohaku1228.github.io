@@ -26,7 +26,7 @@ const titles: Record<View, string> = {
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
-function Home({ data, month, go, openAccount }: { data: Ledger; month: string; go: (view: View) => void; openAccount: (mode: AccountView) => void }) {
+function Home({ data, month, go }: { data: Ledger; month: string; go: (view: View) => void }) {
   const totals = monthly(data, month)
   const annual = annualSummary(data, Number(month.slice(0, 4)))
   const week = foodWeek(data, month, today())
@@ -43,27 +43,12 @@ function Home({ data, month, go, openAccount }: { data: Ledger; month: string; g
     : hasIncome ? `今月の生活費予算はあと ${yen(totals.remaining)} です。次の大きな支払いをサブ口座に登録しておくと、必要な残高が見えます。`
     : '給与・生活費予算・サブ口座の予定を登録すると、残高や支払いのヒントが表示されます。'
   return <div className="stack">
-    {needsSetup && <section className="onboarding"><div><b>まず、今月の計画を設定</b><p>初期設定ファイルを読み込むと、給与・固定費・生活費がまとまって入ります。</p></div><button className="quiet" onClick={() => go('settings')}>設定へ <ArrowRight size={16} /></button></section>}
+    {needsSetup && <section className="onboarding"><div><b>まず、今月の計画を設定</b><p>給与・固定費・生活費の予算を登録できます。</p></div><button className="quiet" onClick={() => go('planning')}>予算へ <ArrowRight size={16} /></button></section>}
     <section className="hero">
       <span className="hero-label"><Wallet size={17} /> あと使える生活費</span>
       <strong className="hero-amount">{yen(totals.remaining)}</strong>
       <div className="hero-meta"><span>予算 {yen(totals.allocated)}</span><span>消化率 {ratio === null ? '—' : `${ratio}%`}</span></div>
       <progress aria-label="生活費の予算消化率" max="100" value={Math.max(0, Math.min(100, ratio ?? 0))} />
-    </section>
-    <section aria-labelledby="home-actions">
-      <h2 id="home-actions">やりたいことから開く</h2>
-      <div className="home-shortcuts">
-        {[
-          { icon: PencilLine, title: '支出を手入力', detail: '買い物の登録・履歴', open: () => go('records') },
-          { icon: Wallet, title: '給与・予算を入力', detail: '給与見込み・固定費', open: () => go('planning') },
-          { icon: Landmark, title: 'サブ口座に記録', detail: 'ボーナス・児童手当・支払い', open: () => openAccount('year') },
-          { icon: CreditCard, title: '引落・振込を確認', detail: 'カードの請求額・必要入金', open: () => openAccount('month') },
-        ].map(({ icon: Icon, title, detail, open }) => <button key={title} onClick={open}>
-          <span className="shortcut-icon"><Icon size={19} aria-hidden="true" /></span>
-          <span><b>{title}</b><small>{detail}</small></span>
-          <ArrowRight size={14} className="shortcut-arrow" aria-hidden="true" />
-        </button>)}
-      </div>
     </section>
     {!needsSetup && !hasIncome && <section className="onboarding"><div><b>この月の収入が未登録です</b><p>収入を登録すると、貯蓄と口座の見通しを計算できます。</p></div><button className="quiet" onClick={() => go('planning')}>収入を登録 <ArrowRight size={16} /></button></section>}
     <div className="stats">
@@ -74,7 +59,6 @@ function Home({ data, month, go, openAccount }: { data: Ledger; month: string; g
     </div>
     <Panel title="口座の見通し">
       <div className="stats"><Stat label="メイン口座の必要入金" value={projection.required} detail={projection.undated ? `別途、日付未定 ${yen(projection.undated)}` : '日付が決まった入出金で計算'} /><Stat label="サブ口座の年間黒字見込み" value={annual.surplus} /></div>
-      <button className="quiet" onClick={() => openAccount('setup')}>引落口座の設定 <ArrowRight size={16} /></button>
     </Panel>
     <Panel title="家計のヒント"><p className="hint">{hint}</p></Panel>
     <Panel title="生活費の内訳">
@@ -112,25 +96,40 @@ function App() {
         }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
       </div>
       <ErrorNotice />
-      {view === 'home' && <Home data={data} month={month} go={go} openAccount={openAccount} />}
+      {view === 'home' && <Home data={data} month={month} go={go} />}
       {view === 'planning' && <Planning key={month} data={data} month={month} save={save} />}
       {(view === 'records' || view === 'receipt') && <Records key={view} mode={view === 'receipt' ? 'scan' : 'manual'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} onManual={() => go('records')} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts data={data} month={month} save={save} mode={accountMode} setMode={setAccountMode} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
-      {view === 'settings' && <Settings data={data} month={month} save={save} />}
+      {view === 'settings' && <Settings data={data} save={save} />}
       {view === 'more' && <div className="stack">
-        <Panel title="家計を管理">
-          <div className="menu">
-            <button onClick={() => openAccount('month')}><ArrowLeftRight size={22} /> 口座と振込 <ArrowRight size={17} /></button>
-            <button onClick={() => openAccount('year')}><Landmark size={22} /> サブ口座の入出金 <ArrowRight size={17} /></button>
-            <button onClick={() => openAccount('setup')}><CreditCard size={22} /> 引落口座の設定 <ArrowRight size={17} /></button>
-            <button onClick={() => go('records')}><PencilLine size={22} /> 支出の手入力・履歴 <ArrowRight size={17} /></button>
-            <button onClick={() => go('analysis')}><BarChart3 size={22} /> 家計の分析 <ArrowRight size={17} /></button>
-            <button onClick={() => go('settings')}><Settings2 size={22} /> 設定とバックアップ <ArrowRight size={17} /></button>
+        {[
+          { title: '記録する', items: [
+            { icon: PencilLine, label: '支出の手入力・履歴', detail: '買い物を登録・編集する', open: () => go('records') },
+            { icon: Wallet, label: '給与・予算を入力', detail: '収入・生活費・固定費', open: () => go('planning') },
+            { icon: Landmark, label: 'サブ口座の入出金', detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
+          ] },
+          { title: '確認する', items: [
+            { icon: ArrowLeftRight, label: '引落・振込を確認', detail: '銀行別の必要額・カード請求', open: () => openAccount('month') },
+            { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
+            { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
+          ] },
+          { title: '設定する', items: [
+            { icon: CreditCard, label: '引落口座の設定', detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
+            { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
+          ] },
+        ].map(group => <section className="menu-section" key={group.title}>
+          <h2>{group.title}</h2>
+          <div className="menu-grid">
+            {group.items.map(({ icon: Icon, label, detail, open }) => <button key={label} onClick={open}>
+              <span className="menu-icon"><Icon size={22} aria-hidden="true" /></span>
+              <span><strong>{label}</strong><small>{detail}</small></span>
+              <ChevronRight size={17} className="menu-chevron" aria-hidden="true" />
+            </button>)}
           </div>
-        </Panel>
+        </section>)}
       </div>}
     </main>
     <nav className="nav" aria-label="メインメニュー"><div>{tabs.map(({ id, name, icon: Icon }) => (

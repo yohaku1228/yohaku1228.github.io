@@ -10,6 +10,7 @@ export function Planning({ data, month, save }: { data: Ledger; month: Month; sa
   const incomes = data.incomes.filter(i => i.date.startsWith(month))
   const income = incomes.find(i => i.id === editingIncome)
   const fixed = data.fixed.find(i => i.id === editingFixed)
+  const fixedCard = data.payments.find(p => p.id === fixed?.cardPaymentId)
   const week = foodWeek(data, month, today())
   const previous = addMonths(month, -1)
   const previousIncome = data.incomes.filter(i => i.date.startsWith(previous))
@@ -66,6 +67,7 @@ export function Planning({ data, month, save }: { data: Ledger; month: Month; sa
       <form key={fixed?.id ?? month} onSubmit={form(fields => {
         const record: FixedExpense = {
           id: fixed?.id ?? uid(), name: str(fields, 'name'), amount: num(fields, 'amount'), accountId: str(fields, 'account'),
+          cardPaymentId: fixed?.cardPaymentId,
           dueDay: str(fields, 'day') ? num(fields, 'day') : null, startMonth: str(fields, 'start'),
           endMonth: str(fields, 'end') || null, kind: str(fields, 'kind') as FixedExpense['kind'],
         }
@@ -77,7 +79,10 @@ export function Planning({ data, month, save }: { data: Ledger; month: Month; sa
           <Field label="引落日（日）"><input name="day" type="number" min="1" max="31" defaultValue={fixed?.dueDay ?? ''} placeholder="未定" /></Field>
           <Field label="開始月"><input type="month" name="start" defaultValue={fixed?.startMonth || month} required /></Field>
           <Field label="終了月"><input type="month" name="end" defaultValue={fixed?.endMonth ?? ''} /></Field>
-          <Field label="口座"><select name="account" defaultValue={fixed?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+          {fixedCard ? <>
+            <input type="hidden" name="account" value={fixedCard.accountId} />
+            <p className="hint">{fixedCard.name} → {data.accounts.find(a => a.id === fixedCard.accountId)?.name}。変更は「引落口座の設定」から行えます。</p>
+          </> : <Field label="口座"><select name="account" defaultValue={fixed?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>}
           <Field label="種類"><select name="kind" defaultValue={fixed?.kind ?? 'expense'}><option value="expense">固定費</option><option value="asset">資産形成</option></select></Field>
         </div>
         <div className="actions"><button className="primary">{fixed ? '固定費を更新' : '固定費を追加'}</button>{fixed && <button type="button" className="quiet" onClick={() => setEditingFixed(null)}>取消</button>}</div>

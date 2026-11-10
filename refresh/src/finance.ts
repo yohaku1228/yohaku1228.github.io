@@ -131,7 +131,11 @@ export function cashEvents(data: Ledger, month: Month): CashEvent[] {
     const id = `fixed:${fixed.id}:${month}`
     const linked = data.transactions.some(t => t.fixedExpenseId === fixed.id && monthOf(t.date) === month)
     if (linked) continue
-    events.push({ id, label: fixed.name, accountId: fixed.accountId, date: fixed.dueDay ? onDay(month, fixed.dueDay) : null, amount: -fixed.amount, paid: data.settled.includes(id) })
+    const card = data.payments.find(payment => payment.id === fixed.cardPaymentId && payment.kind === 'card')
+    events.push({
+      id, label: card ? fixed.name + '（' + card.name + '）' : fixed.name, accountId: card?.accountId ?? fixed.accountId,
+      date: fixed.dueDay ? onDay(month, fixed.dueDay) : null, amount: -fixed.amount, paid: data.settled.includes(id),
+    })
   }
   for (const bill of cardBills(data).filter(b => monthOf(b.date) === month)) {
     const label = data.payments.find(p => p.id === bill.paymentId)?.name ?? 'カード'

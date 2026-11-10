@@ -91,12 +91,21 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
           </form>
           </>}
         </Panel>
-        <Panel title="固定費の引落口座" description="項目ごとに支払い元を選びます。カード明細と紐づけた支払いは、カードの引落口座で集計します。">
-          {data.fixed.length ? <div className="fields">{data.fixed.map(item => <Field key={item.id} label={item.name + 'の引落口座'}>
-            <select value={item.accountId} onChange={event => {
-              const accountId = event.target.value
-              save(old => ({ ...old, fixed: old.fixed.map(row => row.id === item.id ? { ...row, accountId } : row) }))
-            }}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+        <Panel title="固定費の引落口座" description="銀行・現金で直接払うか、カードを通して払うかを選びます。カード払いはそのカードの引落口座に集計します。">
+          {data.fixed.length ? <div className="fields">{data.fixed.map(item => <Field key={item.id} label={item.name + 'の支払方法'}>
+            <select value={item.cardPaymentId ? 'card:' + item.cardPaymentId : 'account:' + item.accountId} onChange={event => {
+              const value = event.target.value
+              const isCard = value.startsWith('card:')
+              const id = value.slice(isCard ? 'card:'.length : 'account:'.length)
+              save(old => {
+                const payment = isCard ? old.payments.find(p => p.id === id && p.kind === 'card') : undefined
+                return { ...old, fixed: old.fixed.map(row => row.id === item.id
+                  ? { ...row, accountId: payment?.accountId ?? id, cardPaymentId: payment?.id } : row) }
+              })
+            }}>
+              <optgroup label="口座・現金">{data.accounts.map(a => <option key={a.id} value={'account:' + a.id}>{a.name}</option>)}</optgroup>
+              <optgroup label="カード払い">{data.payments.filter(p => p.kind === 'card').map(p => <option key={p.id} value={'card:' + p.id}>{p.name} → {data.accounts.find(a => a.id === p.accountId)?.name}</option>)}</optgroup>
+            </select>
           </Field>)}</div> : <p className="empty">固定費は下の「予算」から追加できます。</p>}
         </Panel>
       </>}
@@ -106,7 +115,10 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
           const id = `fixed:${item.id}:${month}`
           const linked = data.transactions.some(t => t.fixedExpenseId === item.id && monthOf(t.date) === month)
           if (linked) return <li key={id}><span><b>{item.name}</b><small>登録した明細の支払方法で集計</small></span><span className="hint">明細に紐づけ済み</span></li>
-          return <li key={id}><span><b>{item.name}</b><small>{item.dueDay ? onDay(month, item.dueDay) : '日付未定'}</small></span><Amount value={item.amount} /><label className="check"><input type="checkbox" checked={data.settled.includes(id)} onChange={() => toggle(id)} /> 支払済み</label></li>
+          const event = events.find(event => event.id === id)
+          const account = data.accounts.find(a => a.id === event?.accountId)
+          const card = data.payments.find(p => p.id === item.cardPaymentId)
+          return <li key={id}><span><b>{item.name}</b><small>{card && card.name + ' → '}{account?.name} ・ {event?.date ?? '日付未定'}</small></span><Amount value={item.amount} /><label className="check"><input type="checkbox" checked={data.settled.includes(id)} onChange={() => toggle(id)} /> 支払済み</label></li>
         })}</ul>{!fixed.length && <p className="empty">この月の固定費はありません。</p>}
       </Panel>
       <Panel title="口座間の移動" description="振込、貯蓄、取り崩しを記録します。生活費の支出には加えません。">

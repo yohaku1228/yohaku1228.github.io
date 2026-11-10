@@ -14,6 +14,7 @@ export interface Budget { month: Month; amounts: Record<Id, Yen>; plannedSavings
 export interface WeeklyBudget { month: Month; start: Day; categoryId: Id; amount: Yen }
 export interface FixedExpense {
   id: Id; name: string; amount: Yen; accountId: Id; dueDay: number | null
+  cardPaymentId?: Id
   startMonth: Month; endMonth: Month | null; kind: 'expense' | 'asset'
 }
 export interface TransactionItem { id: Id; name: string; categoryId: Id; quantity: number; amount: Yen; discount: Yen }
@@ -58,8 +59,4 @@ export interface LegacyArchive {
     transferredStatus: Record<string, boolean>
   }>
   rakutenCount: number
-}
-export interface Plan {
-  budget: Record<Id, Yen>; incomes: { userId: Id; amount: Yen; route: Income['route'] }[]
-  fixed: FixedExpense[]; annual: AnnualBudget[]; milestones: FinancialMilestone[]
 }

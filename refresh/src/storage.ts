@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { create } from 'zustand'
 import { daysInMonth, monthOf } from './finance'
-import type { Ledger, Plan } from './model'
+import type { Ledger } from './model'
 import { starter } from './seed'
 import { pushLedger, cloudEnabled } from './cloud'
 
@@ -16,7 +16,7 @@ const dayOfMonth = z.int().min(1).max(31)
 const route = z.enum(['deposit', 'direct', 'undecided'])
 const amounts = z.record(id, amount)
 const fixed = z.object({
-  id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(),
+  id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(), cardPaymentId: id.optional(),
   startMonth: z.union([month, z.literal('')]), endMonth: month.nullable(), kind: z.enum(['expense', 'asset']),
 }).refine(item => !item.endMonth || item.endMonth >= item.startMonth)
 const annual = z.object({
@@ -75,33 +75,21 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
 }).refine(data => {
   const accounts = new Set(data.accounts.map(a => a.id))
   const categories = new Set(data.categories.map(c => c.id))
-  const payments = new Set(data.payments.map(p => p.id))
+  const payments = new Map(data.payments.map(p => [p.id, p]))
   const annualIds = new Set(data.annual.map(a => a.id))
   return accounts.has('main') && accounts.has('annual') && categories.has('food') && payments.has('cash')
     && data.users.every(u => u.householdId === data.household.id)
     && [...data.incomes, ...data.fixed, ...data.payments, ...data.annual].every(r => accounts.has(r.accountId))
+    && data.fixed.every(item => !item.cardPaymentId || payments.get(item.cardPaymentId)?.kind === 'card')
     && data.transactions.every(t => payments.has(t.paymentId) && t.items.every(i => categories.has(i.categoryId)))
     && data.transfers.every(t => accounts.has(t.from) && accounts.has(t.to))
     && data.annualActuals.every(a => annualIds.has(a.planId))
     && [data.defaultBudget, ...data.budgets.map(b => b.amounts)].every(row => Object.keys(row).every(key => categories.has(key)))
 })
 
-export const planSchema: z.ZodType<Plan> = z.object({
-  budget: amounts,
-  incomes: z.array(z.object({ userId: id, amount, route })),
-  fixed: records(fixed), annual: records(annual), milestones: records(milestone),
-})
 const backupSchema = z.object({ format: z.literal('household-pwa-v1'), ledger: ledgerSchema })
 const key = 'household-pwa:ledger:v1'
 export const backup = (ledger: Ledger) => ({ format: 'household-pwa-v1' as const, exportedAt: new Date().toISOString(), ledger })
-
-export function inspectImport(value: unknown) {
-  const saved = backupSchema.safeParse(value)
-  if (saved.success) return { type: 'backup' as const, ledger: saved.data.ledger }
-  const plan = z.object({ format: z.literal('household-phase1-plan-v1'), plan: planSchema }).safeParse(value)
-  if (plan.success) return { type: 'plan' as const, plan: plan.data.plan }
-  throw new Error('「家計とカード」のバックアップ、または初期設定のJSONファイルを選んでください。')
-}
 
 interface LedgerRepository {
   read(): { ledger: Ledger; revision: string | null } | null
