@@ -19,7 +19,25 @@ export function daysInMonth(month: Month): number {
   return new Date(Date.UTC(year, number, 0)).getUTCDate()
 }
 export const onDay = (month: Month, day: number) => `${month}-${pad(Math.min(day, daysInMonth(month)))}`
-export const transactionAmount = (transaction: Transaction) => sum(transaction.items.map(item => item.amount - item.discount))
+export const transactionAmount = (transaction: Transaction) =>
+  sum(transaction.items.map(item => item.amount - item.discount)) + (transaction.externalTax ?? 0)
+
+export function transactionItemAmounts(transaction: Transaction) {
+  const amounts = transaction.items.map(item => item.amount - item.discount)
+  const tax = transaction.externalTax ?? 0
+  if (!tax) return amounts
+  const basis = sum(amounts.map(amount => Math.max(0, amount)))
+  let weighted = 0
+  let allocated = 0
+  return amounts.map((amount, index) => {
+    if (!basis) return amount + (index === 0 ? tax : 0)
+    weighted += Math.max(0, amount)
+    const throughThisItem = Math.round(tax * (weighted / basis))
+    const total = amount + throughThisItem - allocated
+    allocated = throughThisItem
+    return total
+  })
+}
 export const activeFixed = (data: Ledger, month: Month) => data.fixed.filter(item =>
   (!item.startMonth || item.startMonth <= month) && (!item.endMonth || month <= item.endMonth))
 export const budgetFor = (data: Ledger, month: Month): Budget =>
@@ -36,8 +54,9 @@ export function categorySpending(data: Ledger, month: Month) {
   const spending: Record<string, number> = {}
   for (const transaction of data.transactions) {
     if (transaction.personal || transaction.fixedExpenseId || monthOf(transaction.date) !== month) continue
-    for (const item of transaction.items) {
-      spending[item.categoryId] = (spending[item.categoryId] ?? 0) + item.amount - item.discount
+    const amounts = transactionItemAmounts(transaction)
+    for (const [index, item] of transaction.items.entries()) {
+      spending[item.categoryId] = (spending[item.categoryId] ?? 0) + amounts[index]
     }
   }
   return spending
@@ -210,7 +229,7 @@ export function foodWeek(data: Ledger, month: Month, selected: Day) {
   const manual = data.weeklyBudgets.find(w => w.month === month && w.start === startDate && w.categoryId === 'food')
   const allocated = manual?.amount ?? Math.floor(total * end / days) - Math.floor(total * (start - 1) / days)
   const spent = sum(data.transactions.filter(t => !t.personal && !t.fixedExpenseId && t.date >= startDate && t.date <= endDate)
-    .flatMap(t => t.items.filter(i => i.categoryId === 'food').map(i => i.amount - i.discount)))
+    .flatMap(t => transactionItemAmounts(t).filter((_, index) => t.items[index].categoryId === 'food')))
   const monthlyRemaining = total - (categorySpending(data, month).food ?? 0)
   const remaining = allocated - spent
   return { startDate, endDate, allocated, spent, remaining, daily: Math.floor(Math.max(0, Math.min(remaining, monthlyRemaining)) / (end - day + 1)) }

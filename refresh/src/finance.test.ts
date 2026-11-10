@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly, subAccountForecast } from './finance.ts'
+import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly, subAccountForecast, transactionAmount } from './finance.ts'
 import { starter } from './seed.ts'
 import type { Transaction } from './model.ts'
 
@@ -85,6 +85,23 @@ test('月をまたぐ週を月ごとに分けて、月間食費と一致する',
   const weeks = [1, 7, 14, 21, 28].map(day => foodWeek(ledger, '2026-12', `2026-12-${String(day).padStart(2, '0')}`))
   assert.equal(weeks.at(-1)?.endDate, '2026-12-31')
   assert.equal(weeks.reduce((total, week) => total + week.allocated, 0), 10_000)
+})
+
+test('外税は商品を増やさず、カテゴリー予算とカード請求の合計に含める', () => {
+  const ledger = starter()
+  const receipt: Transaction = {
+    ...purchase, externalTax: 44, items: [
+      { ...purchase.items[0], amount: 78, discount: 0 },
+      { ...purchase.items[0], id: 'salad', amount: 218, discount: 44 },
+      { ...purchase.items[0], id: 'third', categoryId: 'daily', amount: 298, discount: 0 },
+    ],
+  }
+  ledger.transactions.push(receipt)
+  assert.equal(transactionAmount(receipt), 594)
+  assert.equal(cardBills(ledger)[0].amount, 594)
+  assert.equal(cardBills(ledger)[0].itemCount, 3)
+  assert.deepEqual(monthly(ledger, '2026-12').categorySpend, { food: 272, daily: 322 })
+  assert.equal(foodWeek(ledger, '2026-12', receipt.date).spent, 272)
 })
 
 test('偶数月の入金、毎月の積立、24か月ごとの費用を織り込み、実績を二重計上しない', () => {

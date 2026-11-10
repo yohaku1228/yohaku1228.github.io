@@ -20,7 +20,7 @@ export interface FixedExpense {
 export interface TransactionItem { id: Id; name: string; categoryId: Id; quantity: number; amount: Yen; discount: Yen }
 export interface Transaction {
   id: Id; date: Day; merchant: string; paymentId: Id; memo: string; personal: boolean
-  items: TransactionItem[]; receiptId?: Id; fixedExpenseId?: Id; debitMonth?: Month; debitOn?: Day
+  items: TransactionItem[]; externalTax?: Yen; receiptId?: Id; fixedExpenseId?: Id; debitMonth?: Month; debitOn?: Day
 }
 export interface Receipt { id: Id; date: Day; total: Yen; fingerprint: string; imageRefs: string[] }
 export interface PaymentMethod {

@@ -52,6 +52,7 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
   fixed: records(fixed),
   transactions: records(z.object({
     id, date: day, merchant: label, paymentId: id, memo: z.string().max(500), personal: z.boolean(),
+    externalTax: amount.optional(),
     items: records(z.object({ id, name: label, categoryId: id, quantity: z.int().positive(), amount: integer, discount: amount })
       .refine(item => item.amount >= 0 ? item.discount <= item.amount : item.discount === 0)).min(1),
     receiptId: id.optional(), fixedExpenseId: id.optional(), debitMonth: month.optional(), debitOn: day.optional(),
@@ -85,6 +86,19 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
     && data.transfers.every(t => accounts.has(t.from) && accounts.has(t.to))
     && data.annualActuals.every(a => annualIds.has(a.planId))
     && [data.defaultBudget, ...data.budgets.map(b => b.amounts)].every(row => Object.keys(row).every(key => categories.has(key)))
+}).transform(data => {
+  const receipts = new Map(data.receipts.map(receipt => [receipt.id, receipt]))
+  return { ...data, transactions: data.transactions.map(transaction => {
+    if (transaction.externalTax !== undefined || !transaction.receiptId || transaction.items.length < 2) return transaction
+    const receipt = receipts.get(transaction.receiptId)
+    const last = transaction.items.at(-1)!
+    // Older scans stored the calculated tax as a generated final item.
+    if (receipt && last.name === '外税' && last.amount > 0 && last.discount === 0 &&
+        last.id === receipt.fingerprint + ':' + (transaction.items.length - 1)) {
+      return { ...transaction, items: transaction.items.slice(0, -1), externalTax: last.amount }
+    }
+    return transaction
+  }) }
 })
 
 const backupSchema = z.object({ format: z.literal('household-pwa-v1'), ledger: ledgerSchema })

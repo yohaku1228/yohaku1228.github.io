@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
+import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, transactionItemAmounts, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
 import { ReceiptReader, type ReceiptScan } from './receipt'
@@ -95,10 +95,11 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
           id: current?.id ?? uid(), date, merchant, paymentId, fixedExpenseId,
           memo: allowance ? '' : str(fields, 'memo'), personal: fields.has('personal') && !allowance,
           items,
+          externalTax: allowance ? undefined : Number(fields.get('external-tax')) || undefined,
           receiptId: current?.receiptId ?? (draft ? uid() : undefined),
         }
         if (draft?.total !== null && draft?.total !== undefined && draft.total !== transactionAmount(record) &&
-          !window.confirm(`レシートの合計 ${yen(draft.total)} と、入力した明細合計 ${yen(transactionAmount(record))} が異なります。保存しますか？`)) return
+          !window.confirm(`レシートの合計 ${yen(draft.total)} と、外税を含む入力合計 ${yen(transactionAmount(record))} が異なります。保存しますか？`)) return
         const payment = data.payments.find(p => p.id === paymentId)
         if (payment?.kind === 'card') record.debitOn =
           current?.date === date && current.paymentId === paymentId && current.debitOn ? current.debitOn : debitDate(record, payment)
@@ -157,6 +158,9 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
           id: draft.fingerprint + ':' + index, name: item.name, amount: item.amount,
           discount: Math.max(0, item.discount ?? 0), categoryId: 'food', quantity: 1,
         })) ?? []} categories={data.categories} />
+        {(draft || current?.externalTax) && <div className="fields">
+          <Field label="外税（円）"><Money name="external-tax" value={current?.externalTax ?? draft?.externalTax} required={false} /></Field>
+        </div>}
         <label className="check"><input type="checkbox" name="personal" defaultChecked={current?.personal} /> 個人の買い物として生活費から除外</label>
         <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}
           {draft && <button type="button" className="quiet" onClick={() => {
@@ -184,7 +188,9 @@ export function Calendar({ data, month, edit }: { data: Ledger; month: Month; ed
   const transactions = data.transactions.filter(t => !t.personal && monthOf(t.date) === month)
   const events = cashEvents(data, month).filter(e => e.date && e.amount < 0)
   const list = (date: Day) => transactions.filter(t => t.date === date && t.items.some(i => !category || i.categoryId === category))
-  const itemSum = (transaction: Transaction) => sum(transaction.items.filter(i => !category || i.categoryId === category).map(i => i.amount - i.discount))
+  const itemSum = (transaction: Transaction) => category
+    ? sum(transactionItemAmounts(transaction).filter((_, index) => transaction.items[index].categoryId === category))
+    : transactionAmount(transaction)
   return <div className="stack">
     <Panel title="家計カレンダー">
       <div className="actions"><button className={mode === 'spent' ? 'primary' : 'quiet'} onClick={() => setMode('spent')}>利用日</button><button className={mode === 'due' ? 'primary' : 'quiet'} onClick={() => setMode('due')}>支払日</button>
@@ -207,7 +213,7 @@ export function Calendar({ data, month, edit }: { data: Ledger; month: Month; ed
       </div>
     </Panel>
     <Panel title={selected + ' の明細'}>
-      {mode === 'spent' ? <ul className="rows">{list(selected).map(t => <li key={t.id}><span><b>{t.merchant}</b>{t.items.filter(i => !category || i.categoryId === category).map(i => <small key={i.id}>{i.name} ・ {yen(i.amount - i.discount)}</small>)}</span><Amount value={itemSum(t)} /><button className="quiet" onClick={() => edit(t.id)}>編集</button></li>)}</ul>
+      {mode === 'spent' ? <ul className="rows">{list(selected).map(t => <li key={t.id}><span><b>{t.merchant}</b>{t.items.filter(i => !category || i.categoryId === category).map(i => <small key={i.id}>{i.name} ・ {yen(i.amount - i.discount)}</small>)}{!category && !!t.externalTax && <small>外税 ・ {yen(t.externalTax)}</small>}</span><Amount value={itemSum(t)} /><button className="quiet" onClick={() => edit(t.id)}>編集</button></li>)}</ul>
         : <ul className="rows">{events.filter(e => e.date === selected).map(e => <li key={e.id}><span><b>{e.label}</b><small>{e.paid ? '済' : '予定'}</small></span><Amount value={-e.amount} /></li>)}</ul>}
       {(mode === 'spent' ? list(selected).length === 0 : !events.some(e => e.date === selected)) && <p className="empty">この日の記録はありません。</p>}
     </Panel>
