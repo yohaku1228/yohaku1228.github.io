@@ -36,8 +36,9 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
   const daysLeft = days - elapsed + 1
   const foodBudget = totals.budget.amounts.food ?? 0
   const foodSpent = totals.categorySpend.food ?? 0
-  const dayGuide = Math.floor(Math.max(0, foodBudget - foodSpent) / daysLeft)
-  const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining: week.remaining, daysLeft, dayGuide }
+  const weekRemaining = Math.min(week.remaining, foodBudget - foodSpent)
+  const dayGuide = Math.min(week.daily, Math.floor(Math.max(0, foodBudget - foodSpent) / daysLeft))
+  const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining, daysLeft, dayGuide }
   const requestKey = JSON.stringify(snapshot)
   const [advice, setAdvice] = useState<{ key: string; text: string; error?: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -55,7 +56,7 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
           <h2>{label}</h2>
           <strong>{budget ? yen(budget - spent) : '予算未設定'}</strong>
           <p>{budget > 0 && (spent > budget ? 'マイナスは予算超過' : '今月の残り')}</p>
-          <p>予算 {yen(budget)} ／ 使用 {yen(spent)}</p>
+          <p className="focus-amounts"><span>予算 {yen(budget)}</span><span>使用 {yen(spent)}</span></p>
           {budget > 0 && <progress max={budget} value={Math.max(0, Math.min(budget, spent))} aria-label={label + 'の消化率'} />}
         </article>
       })}
@@ -63,7 +64,7 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
     {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
     {current && foodBudget > 0 && <Panel title="食費のアドバイス">
-      <div className="stats"><Stat label="今日の買い物の目安" value={dayGuide} detail={`月末まで今日を含めて${daysLeft}日`} /><Stat label="今週の食費の残り" value={week.remaining} /></div>
+      <div className="stats"><Stat label="今日の買い物の目安" value={dayGuide} detail={`月末まで今日を含めて${daysLeft}日`} /><Stat label="今週使える食費" value={weekRemaining} detail="月の残りを上限に表示" /></div>
       {cloudEnabled && <>
         <button className="quiet" disabled={busy || (advice?.key === requestKey && !advice.error)} onClick={async () => {
           setBusy(true)

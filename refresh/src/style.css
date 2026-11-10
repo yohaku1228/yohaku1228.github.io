@@ -93,8 +93,10 @@ input[type=checkbox] { appearance: auto; accent-color: var(--blue); width: 18px;
 .focus-budget strong { font-size: clamp(19px, 5.8vw, 32px); line-height: 1.2; overflow-wrap: anywhere; }
 .focus-budget p { font-size: 11px; line-height: 1.45; }
 .focus-budget p:empty { display: none; }
+.focus-amounts { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.focus-amounts span { white-space: nowrap; }
 .focus-food { color: #fff; background: linear-gradient(145deg, #2569b2, #133e76); }
-.focus-food progress { accent-color: #bcd9ff; }
+.focus-food progress { --progress-fill: #bcd9ff; --progress-track: #ffffff45; }
 .advice-result { background: #eaf3ff; border-radius: 11px; padding: 10px 12px; margin-top: 8px; font-size: 14px; line-height: 1.65; }
 #income-form, #fixed-form, #sub-actual-form, #transfer-form { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .bill details { flex: 0 0 100%; margin: 0; }
@@ -103,6 +105,10 @@ input[type=checkbox] { appearance: auto; accent-color: var(--blue); width: 18px;
 .line { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 12px; min-height: 23px; }
 .category { display: inline-flex; align-items: center; gap: 7px; }
 progress, meter { display: block; flex: 1; width: 100%; min-width: 0; height: 8px; accent-color: #2a70ba; }
+progress { appearance: none; border: 0; border-radius: 99px; overflow: hidden; background: var(--progress-track, #e0eaf6); }
+progress::-webkit-progress-bar { background: var(--progress-track, #e0eaf6); }
+progress::-webkit-progress-value { background: var(--progress-fill, #2a70ba); }
+progress::-moz-progress-bar { background: var(--progress-fill, #2a70ba); }
 .badge { flex: none; padding: 2px 5px; border-radius: 6px; font-size: 10px; font-weight: 750; }
 .danger { background: #f9e4e5; color: #86242f; }
 .warning { background: #fff0cf; color: #73500b; }
