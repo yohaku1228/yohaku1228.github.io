@@ -1,15 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#216b53"/><stop offset="1" stop-color="#0c302a"/></linearGradient><linearGradient id="paper" x2="0.8" y2="1"><stop stop-color="#fffdf3"/><stop offset="1" stop-color="#e9e9d7"/></linearGradient><linearGradient id="gold" x2="0.8" y2="1"><stop stop-color="#f7da91"/><stop offset="1" stop-color="#cea858"/></linearGradient></defs>
-<path fill="url(#bg)" d="M0 0h512v512H0z"/>
-<circle cx="421" cy="78" r="192" fill="#73b493" opacity=".08"/>
-<circle cx="63" cy="467" r="180" fill="#031e1a" opacity=".16"/>
-<path d="M132 235 256 128 380 235" fill="none" stroke="#061e19" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity=".2" transform="translate(0 9)"/>
-<path d="M132 229 256 122 380 229" fill="none" stroke="url(#paper)" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="149" y="227" width="218" height="151" rx="30" fill="#051f1a" opacity=".23" transform="translate(0 9)"/>
-<rect x="149" y="220" width="218" height="151" rx="30" fill="url(#paper)"/>
-<path d="M170 249h176" stroke="#d5d9c5" stroke-width="4"/>
-<rect x="280" y="269" width="103" height="64" rx="21" fill="url(#gold)"/>
-<circle cx="310" cy="301" r="8" fill="#325a45"/>
-<path d="m193 302 18 18 36-39" fill="none" stroke="#24654c" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="363" cy="145" r="18" fill="url(#gold)"/>
+  <defs>
+    <linearGradient id="blue" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop stop-color="#0a2456"/>
+      <stop offset=".57" stop-color="#1458a2"/>
+      <stop offset="1" stop-color="#62c6f3"/>
+    </linearGradient>
+    <linearGradient id="sky" x2="100%" y2="100%">
+      <stop stop-color="#f2fbff"/>
+      <stop offset="1" stop-color="#8bdcff"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#blue)" d="M0 0h512v512H0z"/>
+  <circle cx="453" cy="26" r="183" fill="none" stroke="#c4efff" stroke-opacity=".15" stroke-width="2"/>
+  <circle cx="453" cy="26" r="218" fill="none" stroke="#c4efff" stroke-opacity=".12" stroke-width="2"/>
+  <g transform="translate(0 9)" opacity=".16" stroke="#061b43" stroke-width="25" fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M148 337V181l73 77 72-77v156"/>
+    <path d="m293 337 71-71m-47 0h47v47"/>
+  </g>
+  <path d="M148 337V181l73 77 72-77v156" stroke="#f3fbff" stroke-width="25" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="m293 337 71-71m-47 0h47v47" stroke="url(#sky)" stroke-width="25" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>
