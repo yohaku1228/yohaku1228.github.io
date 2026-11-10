@@ -41,6 +41,11 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
   const [scanSaved, setScanSaved] = useState(false)
   const review = useRef<HTMLHeadingElement>(null)
   const current = data.transactions.find(t => t.id === editing)
+  const cash = data.payments.find(payment => payment.id === 'cash-wallet' && payment.kind === 'cash')
+    ?? data.payments.find(payment => payment.id === 'cash')!
+  const cards = data.payments.filter(payment => payment.kind === 'card' && payment.id !== 'orico-card')
+  const previousPayment = data.payments.find(payment => payment.id === current?.paymentId &&
+    payment.id !== cash.id && !cards.some(card => card.id === payment.id))
   const draft = current ? null : scan
   const rows = data.transactions.filter(t => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date))
   function remove(transaction: Transaction) {
@@ -140,7 +145,11 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
         <div className="fields">
           <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (draft ? draft.date ?? '' : monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
           <Field label="店舗・品名"><input name="merchant" defaultValue={current?.merchant ?? draft?.merchant ?? ''} placeholder="例：スーパー" maxLength={100} /></Field>
-          <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? 'cash'}>{data.payments.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+          <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? cash.id}>
+            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+            <option value={cash.id}>現金</option>
+            {previousPayment && <option value={previousPayment.id}>{previousPayment.name}（登録時）</option>}
+          </select></Field>
           {data.fixed.length > 0 && <Field label="固定費に紐づける"><select name="fixed" defaultValue={current?.fixedExpenseId ?? ''}><option value="">生活費として記録</option>{data.fixed.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
           <Field label="メモ"><input name="memo" defaultValue={current?.memo} maxLength={500} placeholder="任意" /></Field>
         </div>
