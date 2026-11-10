@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly, subAccountForecast, transactionAmount } from './finance.ts'
+import { accountProjection, activeFixed, annualSummary, cardBills, cashEvents, foodWeek, monthly, paymentSummary, subAccountForecast, transactionAmount } from './finance.ts'
 import { starter } from './seed.ts'
 import type { Transaction } from './model.ts'
 
@@ -102,6 +102,18 @@ test('外税は商品を増やさず、カテゴリー予算とカード請求�
   assert.equal(cardBills(ledger)[0].itemCount, 3)
   assert.deepEqual(monthly(ledger, '2026-12').categorySpend, { food: 272, daily: 322 })
   assert.equal(foodWeek(ledger, '2026-12', receipt.date).spent, 272)
+})
+
+test('銀行別の引落合計は日付未設定を含み、口座移動を除いて確認済みの金額を差し引く', () => {
+  const ledger = starter()
+  ledger.fixed.push({ id: 'school', name: '学校費用', amount: 10000, accountId: 'main', dueDay: null, kind: 'expense', startMonth: '2027-01', endMonth: null })
+  ledger.transactions.push(purchase)
+  ledger.transfers.push({ id: 'transfer', date: '2027-01-18', from: 'main', to: 'annual', amount: 1500, completed: false, purpose: 'transfer' })
+  ledger.settled.push('card:card:2027-01-27')
+  const result = paymentSummary(cashEvents(ledger, '2027-01'), 'main')
+  assert.equal(result.total, 14000)
+  assert.equal(result.remaining, 10000)
+  assert.deepEqual(result.payments.map(event => [event.source, event.date]), [['card', '2027-01-27'], ['fixed', null]])
 })
 
 test('偶数月の入金、毎月の積立、24か月ごとの費用を織り込み、実績を二重計上しない', () => {

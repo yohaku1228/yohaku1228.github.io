@@ -115,6 +115,14 @@ progress::-moz-progress-bar { background: var(--progress-fill, #2a70ba); }
 .notice, .error { padding: 12px; margin-block: 10px; border-radius: 12px; background: #fff3db; color: #593e16; font-size: 13px; line-height: 1.65; }
 .error { position: sticky; top: 10px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 7px; background: #fce9e9; color: #86242f; border: 1px solid #ecc7c7; }
 .account-grid { display: grid; gap: 12px; margin-top: 12px; }
+.bank-entry { justify-self: start; min-height: 46px; }
+.payment-accounts { display: grid; gap: 9px; margin-block: 14px; }
+.payment-account { padding: 12px; background: #f1f7fe; border: 1px solid var(--border); border-radius: 13px; }
+.payment-account h3 { margin: 0 0 8px; }
+.payment-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.payment-figures small { display: block; font-size: 11px; color: var(--muted); }
+.payment-figures strong { display: block; font-size: clamp(17px, 5vw, 24px); overflow-wrap: anywhere; }
+.payment-account details { margin-top: 4px; }
 .account-card { background: #f1f7fe; border-radius: 13px; padding: 13px; }
 .account-card h3 { margin-bottom: 9px; }
 .account-card form { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }

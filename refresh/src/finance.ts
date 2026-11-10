@@ -139,12 +139,15 @@ export function cardBills(data: Ledger) {
   return [...bills.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export interface CashEvent { id: string; label: string; accountId: string; date: Day | null; amount: Yen; paid: boolean }
+export interface CashEvent {
+  id: string; label: string; accountId: string; date: Day | null; amount: Yen; paid: boolean
+  source: 'income' | 'fixed' | 'card' | 'cash' | 'transfer' | 'annual'
+}
 export function cashEvents(data: Ledger, month: Month): CashEvent[] {
   const events: CashEvent[] = []
   for (const income of data.incomes) {
     if (income.route !== 'deposit' || monthOf(income.date) !== month) continue
-    events.push({ id: income.id, label: income.label, accountId: income.accountId, date: income.date, amount: income.actual ?? income.forecast, paid: income.actual !== null })
+    events.push({ id: income.id, label: income.label, accountId: income.accountId, date: income.date, amount: income.actual ?? income.forecast, paid: income.actual !== null, source: 'income' })
   }
   for (const fixed of activeFixed(data, month)) {
     const id = `fixed:${fixed.id}:${month}`
@@ -153,28 +156,38 @@ export function cashEvents(data: Ledger, month: Month): CashEvent[] {
     const card = data.payments.find(payment => payment.id === fixed.cardPaymentId && payment.kind === 'card')
     events.push({
       id, label: card ? fixed.name + '（' + card.name + '）' : fixed.name, accountId: card?.accountId ?? fixed.accountId,
-      date: fixed.dueDay ? onDay(month, fixed.dueDay) : null, amount: -fixed.amount, paid: data.settled.includes(id),
+      date: fixed.dueDay ? onDay(month, fixed.dueDay) : null, amount: -fixed.amount, paid: data.settled.includes(id), source: 'fixed',
     })
   }
   for (const bill of cardBills(data).filter(b => monthOf(b.date) === month)) {
     const label = data.payments.find(p => p.id === bill.paymentId)?.name ?? 'カード'
-    events.push({ ...bill, label, amount: -bill.amount })
+    events.push({ ...bill, label, amount: -bill.amount, source: 'card' })
   }
   for (const transaction of data.transactions.filter(t => monthOf(t.date) === month)) {
     const payment = data.payments.find(p => p.id === transaction.paymentId)
     if (payment?.kind !== 'cash') continue
-    events.push({ id: transaction.id, label: transaction.merchant, accountId: payment.accountId, date: transaction.date, amount: -transactionAmount(transaction), paid: true })
+    events.push({ id: transaction.id, label: transaction.merchant, accountId: payment.accountId, date: transaction.date, amount: -transactionAmount(transaction), paid: true, source: 'cash' })
   }
   for (const transfer of data.transfers.filter(t => monthOf(t.date) === month)) {
-    events.push({ id: transfer.id, label: '口座間移動（出金）', accountId: transfer.from, date: transfer.date, amount: -transfer.amount, paid: transfer.completed })
-    events.push({ id: transfer.id, label: '口座間移動（入金）', accountId: transfer.to, date: transfer.date, amount: transfer.amount, paid: transfer.completed })
+    events.push({ id: transfer.id, label: '口座間移動（出金）', accountId: transfer.from, date: transfer.date, amount: -transfer.amount, paid: transfer.completed, source: 'transfer' })
+    events.push({ id: transfer.id, label: '口座間移動（入金）', accountId: transfer.to, date: transfer.date, amount: transfer.amount, paid: transfer.completed, source: 'transfer' })
   }
   for (const actual of data.annualActuals.filter(a => monthOf(a.date) === month)) {
     const plan = data.annual.find(p => p.id === actual.planId)
     if (!plan) continue
-    events.push({ id: actual.id, label: plan.label, accountId: plan.accountId, date: actual.date, amount: plan.kind === 'income' ? actual.amount : -actual.amount, paid: true })
+    events.push({ id: actual.id, label: plan.label, accountId: plan.accountId, date: actual.date, amount: plan.kind === 'income' ? actual.amount : -actual.amount, paid: true, source: 'annual' })
   }
   return events.sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || a.amount - b.amount)
+}
+
+export function paymentSummary(events: CashEvent[], accountId: string) {
+  const payments = events.filter(event => event.accountId === accountId && event.amount < 0 &&
+    (event.source === 'fixed' || event.source === 'card' || event.source === 'cash'))
+  return {
+    payments,
+    total: sum(payments.map(event => -event.amount)),
+    remaining: sum(payments.filter(event => !event.paid).map(event => -event.amount)),
+  }
 }
 
 export function subAccountForecast(data: Ledger, start: Month, length = 24) {
