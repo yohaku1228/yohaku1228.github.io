@@ -1,5 +1,4 @@
-import { createReceiptHandler, geminiEndpoint } from './receipt.mjs'
-
+const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
 const cookieName = '__Host-kakei-session'
 const sessionSeconds = 14 * 24 * 60 * 60
 const encoder = new TextEncoder()
@@ -119,10 +118,6 @@ export default {
       }
       if (url.pathname === '/api/ledger' && method === 'PUT') return await writeLedger(request, env)
       if (url.pathname === '/api/food-advice' && method === 'POST') return await foodAdvice(request, env)
-      if (url.pathname === '/api/receipt' && method === 'POST') return await createReceiptHandler({
-        origin: url.origin, apiKey: env.GEMINI_API_KEY, freeTierConfirmed: env.GEMINI_FREE_TIER_CONFIRMED === 'true',
-        takeQuota: () => takeGeminiQuota(env),
-      })(request)
       return json(404, { error: '操作が見つかりませんでした。' })
     } catch {
       return json(503, { error: '処理できませんでした。通信状況を確認して再試行してください。' })

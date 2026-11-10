@@ -46,19 +46,6 @@ export async function pushLedger(revision: number, ledger: Ledger): Promise<numb
   return body.revision
 }
 
-export async function readReceipt(image: Blob, signal: AbortSignal) {
-  const response = await request('receipt', {
-    method: 'POST', signal, headers: { 'Content-Type': 'image/jpeg' }, body: image,
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => null)
-    const detail = typeof body?.error === 'string' ? body.error : 'レシートを読み取れませんでした。'
-    const code = typeof body?.code === 'string' && /^[a-z0-9_]{1,48}$/.test(body.code) ? body.code : 'http_' + response.status
-    throw new Error(detail + '（エラーコード ' + code + '）')
-  }
-  return response.json() as Promise<unknown>
-}
-
 export async function getFoodAdvice(totals: { budget: number; spent: number; weekRemaining: number; daysLeft: number; dayGuide: number }, signal: AbortSignal) {
   const response = await request('food-advice', {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(totals),

@@ -53,14 +53,18 @@ h3 { font-weight: 750; }
 .field span { color: #304f74; font-size: 13px; font-weight: 680; }
 .field input, .field select, .actions select { width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px; border: 1px solid #c5d8ed; border-radius: 10px; background: #fbfdff; font-size: 16px; color: #152c49; }
 .field input[type=color] { padding: 5px; }
-.field input[type=file] { margin-block: 3px 8px; }
-.scan-flow { display: grid; gap: 12px; margin-block: 16px; }
-.scan-picker { display: grid; justify-items: center; gap: 7px; padding: 22px 12px; border: 1px dashed #749fcc; border-radius: 16px; background: #edf6ff; text-align: center; color: #1d5189; cursor: pointer; }
-.scan-picker:focus-within { outline: 3px solid #276dc0; outline-offset: 2px; }
-.scan-picker small { color: var(--muted); overflow-wrap: anywhere; max-width: 100%; }
-.scan-submit { min-height: 48px; }
-.scan-flow .notice { margin: 0; }
-.scan-success { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #e3effc; color: #1b4f87; font-size: 13px; }
+.purchase-choice { min-width: 0; margin-block: 12px; }
+.purchase-choice legend { margin-bottom: 5px; font-size: 14px; font-weight: 750; }
+.choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.choices label { position: relative; max-width: 100%; }
+.choices input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.choices span { display: flex; align-items: center; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: #f7fbff; font-size: 13px; overflow-wrap: anywhere; }
+.choices input:checked + span { background: #dfedfd; border-color: var(--blue); color: #1b4e89; font-weight: 800; }
+.choices input:focus-visible + span { outline: 3px solid #276dc0; outline-offset: 2px; }
+.purchase-choice .field { margin-top: 8px; }
+.purchase-total { max-width: 340px; margin-block: 12px; }
+.purchase-total input { font-size: 21px; font-weight: 750; }
+.save-success { padding: 10px 12px; border-radius: 10px; background: #e3effc; color: #1b4f87; font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 10px; }
 .actions select { width: auto; max-width: 100%; }
 .primary, .quiet { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 750; }

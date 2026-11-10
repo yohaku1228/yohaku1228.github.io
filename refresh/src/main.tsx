@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, ScanLine, Settings2, Wallet } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, Plus, Settings2, Wallet } from 'lucide-react'
 import { Accounts, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled, getFoodAdvice } from './cloud'
@@ -16,13 +16,13 @@ import './style.css'
 const tabs = [
   { id: 'home', name: 'ホーム', icon: House },
   { id: 'planning', name: '収入', icon: Wallet },
-  { id: 'receipt', name: cloudEnabled ? 'レシート' : '記録', icon: cloudEnabled ? ScanLine : PencilLine },
+  { id: 'add', name: '支出を追加', icon: Plus },
   { id: 'records', name: '支出', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
 type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'accounts' | 'analysis' | 'settings'
 const titles: Record<View, string> = {
-  home: '今月の家計', planning: '今月の収入', records: '支出を記録', fixed: '固定費', budget: '変動費予算', receipt: 'レシート読み取り',
+  home: '今月の家計', planning: '今月の収入', records: '支出の履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
@@ -100,7 +100,7 @@ function App() {
   const [accountMode, setAccountMode] = useState<AccountView>('payments')
   const [editing, setEditing] = useState<string | null>(null)
   function go(next: View) {
-    if (next === 'records' || next === 'receipt') setEditing(null)
+    if (next === 'records' || next === 'add') setEditing(null)
     setView(next)
     window.scrollTo(0, 0)
   }
@@ -115,7 +115,7 @@ function App() {
     <main className="wrap">
       <div className="page-head">
         <h1>{view === 'accounts' && accountMode === 'payments' ? '銀行別の引落' : titles[view]}</h1>
-        {view !== 'more' && view !== 'settings' && view !== 'receipt' && <div className="month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
+        {view !== 'more' && view !== 'settings' && view !== 'add' && <div className="month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
           if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) { setEditing(null); setMonth(e.target.value) }
         }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
       </div>
@@ -130,10 +130,11 @@ function App() {
       {(view === 'fixed' || view === 'budget') && <Planning key={month} data={data} month={month} save={save} section={view}
         openBudget={() => go('budget')} />}
       {view === 'records' && <div className="actions">
+        <button className="primary" onClick={() => go('add')}><Plus size={17} /> 買い物を追加</button>
         <button className="quiet" onClick={() => openAccount('payments')}><CreditCard size={17} /> 銀行別の引落・現金支払い</button>
       </div>}
-      {(view === 'records' || view === 'receipt') && <Records key={view} mode={view === 'receipt' ? 'scan' : 'manual'} data={data}
-        month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} onManual={() => go('records')} />}
+      {(view === 'records' || view === 'add') && <Records key={view} mode={view === 'add' ? 'add' : 'history'} data={data}
+        month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts data={data} month={month} save={save} mode={accountMode} setMode={setAccountMode} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
@@ -141,7 +142,7 @@ function App() {
       {view === 'more' && <div className="stack">
         {[
           { title: '記録する', items: [
-            { icon: PencilLine, label: '支出の手入力・履歴', detail: '買い物を登録・編集する', open: () => go('records') },
+            { icon: PencilLine, label: '支出の記録・履歴', detail: '支払合計を登録・編集する', open: () => go('records') },
             { icon: Wallet, label: '給与・予備費を入力', detail: '今月の収入の追加・編集', open: () => go('planning') },
           ] },
           { title: '確認する', items: [
@@ -167,9 +168,9 @@ function App() {
       </div>}
     </main>
     <nav className="nav" aria-label="メインメニュー"><div>{tabs.map(({ id, name, icon: Icon }) => (
-      <button key={id} className={id === 'receipt' ? 'nav-primary' : undefined} aria-current={nav === id ? 'page' : undefined}
-        onClick={() => go(id === 'receipt' && !cloudEnabled ? 'records' : id)}>
-        <Icon size={id === 'receipt' ? 27 : 22} strokeWidth={nav === id ? 2.25 : 1.8} aria-hidden="true" /><span>{name}</span>
+      <button key={id} className={id === 'add' ? 'nav-primary' : undefined} aria-current={nav === id ? 'page' : undefined}
+        onClick={() => go(id)}>
+        <Icon size={id === 'add' ? 27 : 22} strokeWidth={nav === id ? 2.25 : 1.8} aria-hidden="true" /><span>{name}</span>
       </button>
     ))}</div></nav>
   </>
