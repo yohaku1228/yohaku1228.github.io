@@ -62,15 +62,9 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 input:is([type=date], [type=month]) { -webkit-appearance: none; appearance: none; text-align: start; }
 input:is([type=date], [type=month])::-webkit-date-and-time-value { min-width: 0; margin: 0; text-align: start; }
 .field input[type=color] { padding: 5px; }
-.purchase-choice { min-width: 0; margin-block: 12px; }
-.purchase-choice legend { margin-bottom: 5px; font-size: 14px; font-weight: 750; }
-.choices { display: flex; flex-wrap: wrap; gap: 6px; }
-.choices label { position: relative; max-width: 100%; }
-.choices input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.choices span { display: flex; align-items: center; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: #f7fbff; font-size: 13px; overflow-wrap: anywhere; }
-.choices input:checked + span { background: #dfedfd; border-color: var(--blue); color: #1b4e89; font-weight: 800; }
-.choices input:focus-visible + span { outline: 3px solid #276dc0; outline-offset: 2px; }
-.purchase-choice .field { margin-top: 8px; }
+.store-fields { display: grid; gap: 12px; margin-block: 12px; }
+.picker-row { max-width: 430px; min-width: 0; }
+.panel > .picker-row { margin-block: 12px; }
 .purchase-total { margin-block: 12px; }
 .purchase-total input { font-size: 21px; font-weight: 750; }
 .save-success { padding: 10px 12px; border-radius: 10px; background: #e3effc; color: #1b4f87; font-size: 13px; }
@@ -167,6 +161,7 @@ summary { cursor: pointer; min-height: 44px; font-size: 14px; padding: 10px 0; c
   .wrap { padding-top: 16px; }
   .stack { gap: 12px; }
   .purchase-meta { grid-template-columns: minmax(0, 1fr); }
+  .quick-entry > .actions > .primary { width: 100%; }
   .fields > .field:has(input:is([type=date], [type=month])) { grid-column: 1 / -1; }
 }
 @media (max-width: 360px) {

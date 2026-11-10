@@ -9,7 +9,7 @@ import { Planning } from './planning'
 import { Calendar, Records } from './records'
 import { Analysis, ErrorNotice, Settings } from './settings'
 import { useLedger } from './storage'
-import { BudgetRow, Panel, Stat } from './ui'
+import { BudgetRow, Field, Panel, Stat } from './ui'
 import type { Ledger } from './model'
 import './style.css'
 
@@ -21,6 +21,9 @@ const tabs = [
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
 type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'accounts' | 'analysis' | 'settings'
+const spendingSections = [
+  { id: 'records', label: '記録・履歴' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
+] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '今月の収入', records: '支出の履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
@@ -122,10 +125,11 @@ function App() {
       <ErrorNotice />
       {view === 'home' && <Home key={month} data={data} month={month} go={go} openPayments={() => openAccount('payments')} />}
       {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section="income" />}
-      {spending && <nav className="actions" aria-label="支出の切り替え">
-        {([{ id: 'records', label: '記録・履歴' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' }] as const)
-          .map(item => <button key={item.id} className={view === item.id ? 'primary' : 'quiet'} aria-pressed={view === item.id}
-            onClick={() => { if (view !== item.id) go(item.id) }}>{item.label}</button>)}
+      {spending && <nav className="picker-row" aria-label="支出の切り替え">
+        <Field label="支出メニュー"><select value={view} onChange={event => {
+          const next = spendingSections.find(item => item.id === event.target.value)
+          if (next) go(next.id)
+        }}>{spendingSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
       </nav>}
       {(view === 'fixed' || view === 'budget') && <Planning key={month} data={data} month={month} save={save} section={view}
         openBudget={() => go('budget')} />}

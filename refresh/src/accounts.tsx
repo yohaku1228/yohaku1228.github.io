@@ -4,7 +4,11 @@ import type { Ledger, Month, PaymentMethod, Transfer } from './model'
 import { SubAccount } from './sub-account'
 import { Amount, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
-export type AccountView = 'payments' | 'month' | 'year' | 'setup'
+const accountViews = [
+  { id: 'payments', label: '銀行別の引落' }, { id: 'month', label: '月次の資金繰り' },
+  { id: 'year', label: 'サブ口座' }, { id: 'setup', label: '引落口座の設定' },
+] as const
+export type AccountView = typeof accountViews[number]['id']
 export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; month: Month; save: Save; mode: AccountView; setMode: (mode: AccountView) => void }) {
   const [cardId, editCard] = useState<string | null>(null)
   const [transferVersion, bump] = useState(0)
@@ -21,7 +25,10 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
     save(old => ({ ...old, settled: old.settled.includes(id) ? old.settled.filter(s => s !== id) : [...old.settled, id] }))
   }
   return <div className="stack">
-    <div className="actions"><button className={mode === 'payments' ? 'primary' : 'quiet'} aria-pressed={mode === 'payments'} onClick={() => setMode('payments')}>銀行別の引落</button><button className={mode === 'month' ? 'primary' : 'quiet'} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>月次の資金繰り</button><button className={mode === 'year' ? 'primary' : 'quiet'} aria-pressed={mode === 'year'} onClick={() => setMode('year')}>サブ口座</button><button className={mode === 'setup' ? 'primary' : 'quiet'} aria-pressed={mode === 'setup'} onClick={() => setMode('setup')}>引落口座の設定</button></div>
+    <div className="picker-row"><Field label="口座メニュー"><select value={mode} onChange={event => {
+      const next = accountViews.find(item => item.id === event.target.value)
+      if (next) setMode(next.id)
+    }}>{accountViews.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field></div>
     {mode === 'payments' && <Panel title="今月の引落・支払い" description="登録した固定費・カード請求・現金払いを口座別に表示します。引落日が決まっていない固定費も含みます。">
       {summaries.length ? <div className="payment-accounts">
         {summaries.map(({ account, payments, total, remaining }) => <article className="payment-account" key={account.id}>

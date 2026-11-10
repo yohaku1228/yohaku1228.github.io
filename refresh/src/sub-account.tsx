@@ -25,6 +25,7 @@ export function SubAccount({ data, month, save }: { data: Ledger; month: Month; 
   const actuals = data.annualActuals.filter(row => row.date.startsWith(String(year)))
   const realAmount = (id: string) => sum(actuals.filter(row => row.planId === id).map(row => row.amount))
   const selectedActual = (editingActual ? data.annual : annual.plans).find(p => p.id === actualId)
+  const templates = starterItems.filter(item => !annual.plans.some(plan => plan.label.includes(item.label)))
   const undated = annual.plans.filter(p => !p.schedule || (p.schedule.kind === 'cycle' && !p.schedule.nextMonth))
   const undatedAmount = (kind: 'income' | 'expense') => sum(undated.filter(p => kind === 'income' ? p.kind === 'income' : p.kind !== 'income')
     .map(p => Math.max(0, p.amount - realAmount(p.id))))
@@ -45,7 +46,12 @@ export function SubAccount({ data, month, save }: { data: Ledger; month: Month; 
   }
   return <div className="stack">
     <Panel title="入金・支払いを記録" description="ボーナスや児童手当が入った日、学童費などを支払った日に記録します。予定とは別に集計します。">
-      <div className="actions">{annual.plans.map(plan => <button key={plan.id} className={actualId === plan.id ? 'primary' : 'quiet'} onClick={() => openActual(plan.id)}>{plan.label}{plan.kind === 'income' ? 'の入金' : 'の支払い'}</button>)}</div>
+      {annual.plans.length > 0 && <div className="picker-row"><Field label="記録する項目">
+        <select value={annual.plans.some(plan => plan.id === actualId) ? actualId ?? '' : ''} onChange={event => openActual(event.target.value)}>
+          <option value="" disabled>入金・支払いを選ぶ</option>
+          {annual.plans.map(plan => <option key={plan.id} value={plan.id}>{plan.label}{plan.kind === 'income' ? 'の入金' : 'の支払い'}</option>)}
+        </select>
+      </Field></div>}
       {!annual.plans.length && <p className="empty">下の「年間・繰り返しの予定」で項目を追加すると、ここから記録できます。</p>}
       {selectedActual && <form id="sub-actual-form" key={month + selectedActual.id + (editingActual?.id ?? '')} onSubmit={form(fields => {
         const record = { id: editingActual?.id ?? uid(), planId: selectedActual.id, date: str(fields, 'date'), amount: num(fields, 'amount') }
@@ -96,8 +102,16 @@ export function SubAccount({ data, month, save }: { data: Ledger; month: Month; 
           <small>{cycle ? `1回 ${yen(plan.amount)} ・ 月割り積立目安 ${yen(Math.ceil(plan.amount / cycle.interval))}` : `年間実績 ${yen(realAmount(plan.id))}`}</small></span>
           <Amount value={annualPlanAmount(plan, year)} /><button className="quiet" onClick={() => start(plan)}>編集</button></li>
       })}</ul>
-      <div className="actions"><button className="quiet" onClick={() => start()}>＋ 項目を追加</button>
-        {starterItems.filter(item => !annual.plans.some(p => p.label.includes(item.label))).map(item => <button key={item.label} className="quiet" onClick={() => start({ ...item, id: uid(), accountId: 'annual' })}>＋ {item.label}</button>)}</div>
+      {!draft && <div className="picker-row"><Field label="予定を追加">
+        <select value="" onChange={event => {
+          const template = templates.find(item => item.label === event.target.value)
+          start(template ? { ...template, id: uid(), accountId: 'annual' } : undefined)
+        }}>
+          <option value="" disabled>追加する予定を選ぶ</option>
+          {templates.map(item => <option key={item.label} value={item.label}>{item.label}</option>)}
+          <option value="custom">自由入力</option>
+        </select>
+      </Field></div>}
       {draft && <form id="sub-plan-form" key={draft.id} onSubmit={form(fields => {
         let schedule: AnnualBudget['schedule']
         if (frequency === 'monthly' || frequency === 'even') schedule = { kind: frequency }

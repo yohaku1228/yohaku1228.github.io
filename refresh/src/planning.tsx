@@ -48,13 +48,14 @@ export function Planning({ data, month, save, section, openBudget }: {
           <Amount value={item.actual ?? item.forecast} /><button className="quiet" onClick={() => openIncome(item.id)}>編集</button>
         </SwipeRow>)}</ul>
       </> : <p className="empty">この月の収入はまだありません。</p>}
+      {!editingIncome && <div className="picker-row"><Field label="収入を追加">
+        <select value="" onChange={event => openIncome(event.target.value)}>
+          <option value="" disabled>収入の種類を選ぶ</option>
+          <option value="salary-a">パパの給与</option><option value="salary-b">ママの給与</option>
+          <option value="reserve">予備費</option><option value="new">その他の収入</option>
+        </select>
+      </Field></div>}
       <div className="actions">
-        {!editingIncome && <>
-          <button className="primary" onClick={() => openIncome('salary-a')}>＋ パパの給与</button>
-          <button className="primary" onClick={() => openIncome('salary-b')}>＋ ママの給与</button>
-          <button className="quiet" onClick={() => openIncome('reserve')}>＋ 予備費</button>
-          <button className="quiet" onClick={() => openIncome('new')}>＋ その他の収入</button>
-        </>}
         {!editingIncome && incomes.length === 0 && previousIncome.length > 0 && <button className="quiet" onClick={() => save(old => {
           if (old.incomes.some(item => item.date.startsWith(month))) return old
           return { ...old, incomes: [...old.incomes, ...previousIncome.map(i => ({ ...i, id: uid(), date: onDay(month, Number(i.date.slice(8))), forecast: i.actual ?? i.forecast, actual: null }))] }

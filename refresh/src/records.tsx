@@ -13,13 +13,14 @@ function QuickPurchase({ categories, current }: { categories: Ledger['categories
     <Field label="変動費の項目"><select name="category" value={category} onChange={event => setCategory(event.target.value)}>
       {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select></Field>
-    {!allowance && <fieldset className="purchase-choice"><legend>店舗</legend>
-      <div className="choices">{[...stores, 'other'].map(item => <label key={item}>
-        <input type="radio" name="store" value={item} required checked={store === item} onChange={() => setStore(item)} />
-        <span>{item === 'other' ? 'その他' : item}</span>
-      </label>)}</div>
+    {!allowance && <div className="store-fields">
+      <Field label="店舗"><select name="store" required value={store} onChange={event => setStore(event.target.value)}>
+        <option value="" disabled>店舗を選ぶ</option>
+        {stores.map(name => <option key={name} value={name}>{name}</option>)}
+        <option value="other">その他（手入力）</option>
+      </select></Field>
       {store === 'other' && <Field label="店舗名"><input name="merchant" defaultValue={current && !stores.includes(current.merchant) ? current.merchant : ''} required maxLength={100} /></Field>}
-    </fieldset>}
+    </div>}
     <div className="purchase-total">
       <Field label="支払合計（税込・円）"><Money name="amount" value={current ? transactionAmount(current) : undefined} negative /></Field>
     </div>
@@ -81,7 +82,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
     {saved && <p className="save-success" role="status">支出を保存しました。</p>}
     {(mode === 'add' || current) && <section className="panel">
       {current && <h2>支出を編集</h2>}
-      <form key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
+      <form className={mode === 'add' ? 'quick-entry' : undefined} key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
         const categories = fields.getAll('category').map(String)
         const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
         const allowance = allowanceLines.length > 0
@@ -199,8 +200,14 @@ export function Calendar({ data, month, edit }: { data: Ledger; month: Month; ed
     : transactionAmount(transaction)
   return <div className="stack">
     <Panel title="家計カレンダー">
-      <div className="actions"><button className={mode === 'spent' ? 'primary' : 'quiet'} onClick={() => setMode('spent')}>利用日</button><button className={mode === 'due' ? 'primary' : 'quiet'} onClick={() => setMode('due')}>支払日</button>
-        {mode === 'spent' && <select aria-label="カテゴリーで絞り込み" value={category} onChange={e => setCategory(e.target.value)}><option value="">すべて</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}</div>
+      <div className="fields">
+        <Field label="表示する日付"><select value={mode} onChange={event => setMode(event.target.value === 'due' ? 'due' : 'spent')}>
+          <option value="spent">利用日</option><option value="due">支払日</option>
+        </select></Field>
+        {mode === 'spent' && <Field label="カテゴリー"><select value={category} onChange={e => setCategory(e.target.value)}>
+          <option value="">すべて</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select></Field>}
+      </div>
       <div className="calendar">
         {['日', '月', '火', '水', '木', '金', '土'].map(d => <span className="weekday" key={d}>{d}</span>)}
         {Array.from({ length: first }, (_, i) => <span key={'empty' + i} />)}
