@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, Plus, Settings2, Wallet } from 'lucide-react'
-import { Accounts, type AccountView } from './accounts'
+import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled, getFoodAdvice } from './cloud'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
@@ -117,7 +117,7 @@ function App() {
     <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
       <div className="page-head">
-        <h1>{view === 'accounts' && accountMode === 'payments' ? '銀行別の引落' : titles[view]}</h1>
+        <h1>{view === 'accounts' ? accountTitles[accountMode] : titles[view]}</h1>
         {view !== 'more' && view !== 'settings' && view !== 'add' && <div className="month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
           if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) { setEditing(null); setMonth(e.target.value) }
         }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
@@ -138,15 +138,16 @@ function App() {
       {(view === 'records' || view === 'add') && <Records key={view} mode={view === 'add' ? 'add' : 'history'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
-      {view === 'accounts' && <Accounts data={data} month={month} save={save} mode={accountMode} setMode={setAccountMode} />}
+      {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
       {view === 'settings' && <Settings data={data} save={save} />}
       {view === 'more' && <div className="stack">
         {[
           { title: '引落・口座', items: [
-            { icon: ArrowLeftRight, label: '銀行別の引落・現金支払い', detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
-            { icon: CreditCard, label: '引落口座の設定', detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
-            { icon: Landmark, label: 'サブ口座', detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
+            { icon: ArrowLeftRight, label: accountTitles.payments, detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
+            { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
+            { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
+            { icon: Wallet, label: accountTitles.month, detail: '残高の見通し・口座間の移動', open: () => openAccount('month') },
           ] },
           { title: 'その他', items: [
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
