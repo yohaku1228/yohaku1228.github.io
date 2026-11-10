@@ -38,6 +38,8 @@ function Home({ data, month, go, openPayments }: {
   const daysLeft = days - elapsed + 1
   const foodBudget = totals.budget.amounts.food ?? 0
   const foodSpent = totals.categorySpend.food ?? 0
+  const foodName = data.categories.find(category => category.id === 'food')?.name ?? '食費'
+  const snacksName = data.categories.find(category => category.id === 'snacks')?.name ?? 'お菓子・ジュース'
   const weekRemaining = Math.min(week.remaining, foodBudget - foodSpent)
   const dayGuide = Math.min(week.daily, Math.floor(Math.max(0, foodBudget - foodSpent) / daysLeft))
   const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining, daysLeft, dayGuide }
@@ -45,13 +47,13 @@ function Home({ data, month, go, openPayments }: {
   const [advice, setAdvice] = useState<{ key: string; text: string; error?: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const hasIncome = data.incomes.some(income => monthOf(income.date) === month)
-  const foodAlert = foodBudget > 0 && foodSpent > foodBudget ? `食費が予算を ${yen(foodSpent - foodBudget)} 超えています。`
-    : foodBudget > 0 && foodSpent === foodBudget ? '食費が今月の予算に達しました。'
-    : foodBudget > 0 && foodSpent / foodBudget >= 0.8 ? '食費は予算の80％以上を使っています。'
-    : current && foodBudget > 0 && foodSpent > foodBudget * elapsed / days * 1.15 ? '食費が月の日数に対して早めのペースです。' : ''
+  const foodAlert = foodBudget > 0 && foodSpent > foodBudget ? `${foodName}が予算を ${yen(foodSpent - foodBudget)} 超えています。`
+    : foodBudget > 0 && foodSpent === foodBudget ? foodName + 'が今月の予算に達しました。'
+    : foodBudget > 0 && foodSpent / foodBudget >= 0.8 ? foodName + 'は予算の80％以上を使っています。'
+    : current && foodBudget > 0 && foodSpent > foodBudget * elapsed / days * 1.15 ? foodName + 'が月の日数に対して早めのペースです。' : ''
   return <div className="stack">
-    <section className="focus-budgets" aria-label="今月の食費とお菓子代">
-      {([{ id: 'food', label: '食費' }, { id: 'snacks', label: 'お菓子・ジュース' }]).map(({ id, label }) => {
+    <section className="focus-budgets" aria-label="よく使う予算">
+      {([{ id: 'food', label: foodName }, { id: 'snacks', label: snacksName }]).map(({ id, label }) => {
         const budget = totals.budget.amounts[id] ?? 0
         const spent = totals.categorySpend[id] ?? 0
         return <article className={id === 'food' ? 'focus-budget focus-food' : 'focus-budget'} key={id}>

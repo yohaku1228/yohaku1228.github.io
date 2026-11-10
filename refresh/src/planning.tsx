@@ -15,6 +15,7 @@ export function Planning({ data, month, save, section, setSection }: {
   const [editingIncome, setEditingIncome] = useState<string | null>(null)
   const [editingFixed, setEditingFixed] = useState<string | null>(null)
   const [allocatedDraft, setAllocatedDraft] = useState<number | null>(null)
+  const [renaming, setRenaming] = useState(false)
   const incomes = data.incomes.filter(i => i.date.startsWith(month))
   const income = incomes.find(i => i.id === editingIncome)
   const fixed = data.fixed.find(i => i.id === editingFixed)
@@ -98,19 +99,36 @@ export function Planning({ data, month, save, section, setSection }: {
     </Panel></div>
     <div className="stack" hidden={section !== 'budget'}>
     <div className="stats"><Stat label="変動費に使える額" value={available} /><Stat label={unassigned < 0 ? '配分オーバー' : 'あと配分できる額'} value={Math.abs(unassigned)} /></div>
-    <Panel title="変動費を配分する" description="給与・予備費から固定費を引いた残りを、食費・お菓子代・光熱費などに分けます。">
+    <Panel title="変動費を配分する" description="同じ月の予算は、金額を変えて保存し直せます。">
       <form key={month + JSON.stringify(currentBudget)} onInput={event => {
         const fields = new FormData(event.currentTarget)
         setAllocatedDraft(data.categories.reduce((total, category) => total + num(fields, category.id), num(fields, 'savings')))
       }} onSubmit={form(fields => {
         const amounts = Object.fromEntries(data.categories.map(c => [c.id, num(fields, c.id)]))
-        if (save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { month, amounts, plannedSavings: num(fields, 'savings') }] }))) setAllocatedDraft(null)
+        if (save(old => ({
+          ...old,
+          categories: renaming ? old.categories.map(category => ({ ...category, name: str(fields, 'category-name:' + category.id) })) : old.categories,
+          budgets: [...old.budgets.filter(b => b.month !== month), { month, amounts, plannedSavings: num(fields, 'savings') }],
+        }))) {
+          setAllocatedDraft(null)
+          setRenaming(false)
+        }
       })}>
         <div className="fields">
           {data.categories.map(c => <Field key={c.id} label={c.name}><Money name={c.id} value={totals.budget.amounts[c.id] ?? 0} /></Field>)}
           <Field label="貯蓄予定"><Money name="savings" value={totals.budget.plannedSavings} /></Field>
         </div>
-        <div className="actions"><button className="primary">予算を保存</button><button type="button" className="quiet" disabled={!budgets.some(b => b.month === previous)} onClick={() => {
+        {renaming && <fieldset className="budget-names">
+          <legend>変動費の項目名</legend>
+          <p className="hint">変更した名前はホームや過去の明細にも反映されます。</p>
+          <div className="fields">{data.categories.map(category => <Field key={category.id} label={category.name + 'の名前'}>
+            <input name={'category-name:' + category.id} defaultValue={category.name} required maxLength={100} />
+          </Field>)}</div>
+          <button type="button" className="quiet" onClick={() => setRenaming(false)}>名前の変更を取り消す</button>
+        </fieldset>}
+        <div className="actions"><button className="primary">予算を保存</button>
+        {!renaming && <button type="button" className="quiet" onClick={() => setRenaming(true)}>項目名を変更</button>}
+        <button type="button" className="quiet" disabled={renaming || !budgets.some(b => b.month === previous)} onClick={() => {
           if (!window.confirm('この月の配分を前月の配分で置き換えますか？')) return
           const plan = budgetFor(data, previous)
           if (save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { ...plan, month }] }))) setAllocatedDraft(null)
