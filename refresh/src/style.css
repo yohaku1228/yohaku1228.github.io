@@ -78,8 +78,17 @@ input[type=checkbox] { appearance: auto; accent-color: var(--green); width: 18px
 .rows li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 0; border-bottom: 1px solid #e4ebe6; }
 .rows li > :first-child { flex: 1 1 100px; min-width: 0; overflow-wrap: anywhere; }
 .rows li small { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.row-actions { display: flex; gap: 4px; }
 .rows .quiet { padding-inline: 8px; }
+.rows .swipe-row { position: relative; display: block; overflow: hidden; padding: 0; touch-action: pan-y; }
+.swipe-content { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 58px; padding-block: 8px; }
+.swipe-content > :first-child { flex: 1 1 84px; min-width: 0; overflow-wrap: anywhere; }
+.swipe-content > .amount, .swipe-content > button { flex: none; }
+.swipe-content > .amount { font-size: clamp(12px, 3.6vw, 16px); }
+.swipe-row[data-open=true] .swipe-content { padding-inline-end: 64px; }
+.swipe-delete { position: absolute; inset: 0 0 0 auto; width: 58px; background: #a1323c; color: #fff; font-size: 13px; font-weight: 750; }
+.rows .row-more { min-width: 42px; }
+.planning-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+#income-form, #fixed-form, #sub-actual-form, #transfer-form { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .bill details { flex: 0 0 100%; margin: 0; }
 .bill details form { max-width: 420px; }
 .budget-row { padding: 8px 0; }

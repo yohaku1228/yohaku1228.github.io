@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, transactionItemAmounts, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
-import { Amount, Field, form, Money, Panel, str, uid, type Save } from './ui'
+import { Amount, Field, form, Money, Panel, str, SwipeRow, uid, type Save } from './ui'
 import { ReceiptReader, type ReceiptScan } from './receipt'
 
 function billId(data: Ledger, transaction: Transaction) {
@@ -174,7 +174,10 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
     </section>}
     {mode === 'manual' && <Panel title="この月の履歴">
       {rows.length === 0 && <p className="empty">まだ支出がありません。</p>}
-      <ul className="rows">{rows.map(t => <li key={t.id}><span><b>{t.merchant}</b><small>{t.date} ・ {t.items.length > 1 ? `${t.items.length}明細` : data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span><Amount value={transactionAmount(t)} /><div className="row-actions"><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button><button className="quiet negative" onClick={() => remove(t)}>削除</button></div></li>)}</ul>
+      <ul className="rows">{rows.map(t => <SwipeRow key={t.id} label={t.merchant} onRemove={() => remove(t)}>
+        <span><b>{t.merchant}</b><small>{t.date} ・ {t.items.length > 1 ? `${t.items.length}明細` : data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span>
+        <Amount value={transactionAmount(t)} /><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button>
+      </SwipeRow>)}</ul>
     </Panel>}
   </div>
 }

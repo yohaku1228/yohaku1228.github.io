@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { addMonths, annualPlanAmount, annualSummary, monthIndex, monthOf, onDay, subAccountForecast, sum, today, yen } from './finance'
-import type { AnnualBudget, Ledger, Month } from './model'
-import { Amount, Field, form, Money, num, Panel, Stat, str, uid, type Save } from './ui'
+import type { AnnualActual, AnnualBudget, Ledger, Month } from './model'
+import { Amount, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
 const descriptions = { monthly: '毎月', even: '偶数月', yearly: '年1回', cycle: '複数月ごと' }
 const starterItems = [
@@ -21,10 +21,10 @@ export function SubAccount({ data, month, save }: { data: Ledger; month: Month; 
   const [draft, edit] = useState<AnnualBudget | null>(null)
   const [frequency, setFrequency] = useState('manual')
   const [actualId, selectActual] = useState<string | null>(null)
-  const [version, bump] = useState(0)
+  const [editingActual, setEditingActual] = useState<AnnualActual | null>(null)
   const actuals = data.annualActuals.filter(row => row.date.startsWith(String(year)))
   const realAmount = (id: string) => sum(actuals.filter(row => row.planId === id).map(row => row.amount))
-  const selectedActual = annual.plans.find(p => p.id === actualId)
+  const selectedActual = (editingActual ? data.annual : annual.plans).find(p => p.id === actualId)
   const undated = annual.plans.filter(p => !p.schedule || (p.schedule.kind === 'cycle' && !p.schedule.nextMonth))
   const undatedAmount = (kind: 'income' | 'expense') => sum(undated.filter(p => kind === 'income' ? p.kind === 'income' : p.kind !== 'income')
     .map(p => Math.max(0, p.amount - realAmount(p.id))))
@@ -34,29 +34,40 @@ export function SubAccount({ data, month, save }: { data: Ledger; month: Month; 
     setFrequency(next.schedule?.kind ?? 'manual')
     requestAnimationFrame(() => document.getElementById('sub-plan-form')?.scrollIntoView({ block: 'nearest' }))
   }
-  function openActual(plan: AnnualBudget) {
-    selectActual(plan.id)
+  function openActual(planId: string, existing: AnnualActual | null = null) {
+    selectActual(planId)
+    setEditingActual(existing)
     requestAnimationFrame(() => document.getElementById('sub-actual-form')?.scrollIntoView({ block: 'nearest' }))
+  }
+  function closeActual() {
+    selectActual(null)
+    setEditingActual(null)
   }
   return <div className="stack">
     <Panel title="入金・支払いを記録" description="ボーナスや児童手当が入った日、学童費などを支払った日に記録します。予定とは別に集計します。">
-      <div className="actions">{annual.plans.map(plan => <button key={plan.id} className={actualId === plan.id ? 'primary' : 'quiet'} onClick={() => openActual(plan)}>{plan.label}{plan.kind === 'income' ? 'の入金' : 'の支払い'}</button>)}</div>
+      <div className="actions">{annual.plans.map(plan => <button key={plan.id} className={actualId === plan.id ? 'primary' : 'quiet'} onClick={() => openActual(plan.id)}>{plan.label}{plan.kind === 'income' ? 'の入金' : 'の支払い'}</button>)}</div>
       {!annual.plans.length && <p className="empty">下の「年間・繰り返しの予定」で項目を追加すると、ここから記録できます。</p>}
-      {selectedActual && <form id="sub-actual-form" key={month + selectedActual.id + version} onSubmit={form(fields => {
+      {selectedActual && <form id="sub-actual-form" key={month + selectedActual.id + (editingActual?.id ?? '')} onSubmit={form(fields => {
+        const record = { id: editingActual?.id ?? uid(), planId: selectedActual.id, date: str(fields, 'date'), amount: num(fields, 'amount') }
         if (save(old => ({
-          ...old, annualActuals: [...old.annualActuals, { id: uid(), planId: selectedActual.id, date: str(fields, 'date'), amount: num(fields, 'amount') }],
-        }))) bump(v => v + 1)
+          ...old, annualActuals: [...old.annualActuals.filter(row => row.id !== record.id), record],
+        }))) closeActual()
       })}>
-        <div className="fields"><Field label={selectedActual.kind === 'income' ? '入金日' : '支払日'}><input type="date" name="date" defaultValue={monthOf(today()) === month ? today() : onDay(month, 1)} min={`${year}-01-01`} max={`${year}-12-31`} required /></Field>
-          <Field label="実際の金額"><Money name="amount" /></Field></div>
-        <button className="primary">{selectedActual.label}を記録</button>
+        <div className="fields"><Field label={selectedActual.kind === 'income' ? '入金日' : '支払日'}><input type="date" name="date" defaultValue={editingActual?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} min={`${year}-01-01`} max={`${year}-12-31`} required /></Field>
+          <Field label="実際の金額"><Money name="amount" value={editingActual?.amount} /></Field></div>
+        <div className="actions"><button className="primary">{editingActual ? '記録を更新' : selectedActual.label + 'を記録'}</button>
+          <button type="button" className="quiet" onClick={closeActual}>取消</button></div>
       </form>}
       {actuals.length > 0 && <details open><summary>{year}年の記録（{actuals.length}件）</summary>
         <ul className="rows">{[...actuals].sort((a, b) => b.date.localeCompare(a.date)).map(row => {
           const plan = data.annual.find(p => p.id === row.planId)
-          return <li key={row.id}><span><b>{plan?.label}</b><small>{row.date} ・ {plan?.kind === 'income' ? '入金' : '支払'}</small></span><Amount value={row.amount} /><button className="quiet negative" onClick={() => {
-            if (window.confirm('この入出金記録を削除しますか？')) save(old => ({ ...old, annualActuals: old.annualActuals.filter(item => item.id !== row.id) }))
-          }}>削除</button></li>
+          return <SwipeRow key={row.id} label={plan?.label ?? '入出金記録'} onRemove={() => {
+            if (!window.confirm('この入出金記録を削除しますか？')) return
+            if (save(old => ({ ...old, annualActuals: old.annualActuals.filter(item => item.id !== row.id) })) && editingActual?.id === row.id) closeActual()
+          }}>
+            <span><b>{plan?.label}</b><small>{row.date} ・ {plan?.kind === 'income' ? '入金' : '支払'}</small></span>
+            <Amount value={row.amount} /><button className="quiet" onClick={() => openActual(row.planId, row)}>編集</button>
+          </SwipeRow>
         })}</ul>
       </details>}
     </Panel>

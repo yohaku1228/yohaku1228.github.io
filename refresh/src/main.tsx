@@ -5,7 +5,7 @@ import { Accounts, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
 import { accountProjection, addMonths, annualSummary, cardBills, cashEvents, foodWeek, monthly, monthOf, subAccountForecast, today, yen } from './finance'
-import { Planning } from './planning'
+import { Planning, type PlanningView } from './planning'
 import { Calendar, Records } from './records'
 import { Analysis, ErrorNotice, Settings } from './settings'
 import { useLedger } from './storage'
@@ -26,7 +26,7 @@ const titles: Record<View, string> = {
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
-function Home({ data, month, go }: { data: Ledger; month: string; go: (view: View) => void }) {
+function Home({ data, month, go }: { data: Ledger; month: string; go: (view: View, section?: PlanningView) => void }) {
   const totals = monthly(data, month)
   const annual = annualSummary(data, Number(month.slice(0, 4)))
   const week = foodWeek(data, month, today())
@@ -64,7 +64,7 @@ function Home({ data, month, go }: { data: Ledger; month: string; go: (view: Vie
     <Panel title="生活費の内訳">
       {data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}
       {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
-      <button className="quiet" onClick={() => go('planning')}>予算を開く <ArrowRight size={16} /></button>
+      <button className="quiet" onClick={() => go('planning', 'budget')}>生活費予算を開く <ArrowRight size={16} /></button>
     </Panel>
   </div>
 }
@@ -74,10 +74,12 @@ function App() {
   const save = useLedger(s => s.update)
   const [month, setMonth] = useState(() => monthOf(today()))
   const [view, setView] = useState<View>('home')
+  const [planningView, setPlanningView] = useState<PlanningView>('income')
   const [accountMode, setAccountMode] = useState<AccountView>('month')
   const [editing, setEditing] = useState<string | null>(null)
-  function go(next: View) {
+  function go(next: View, section: PlanningView = 'income') {
     if (next === 'records' || next === 'receipt') setEditing(null)
+    if (next === 'planning') setPlanningView(section)
     setView(next)
     window.scrollTo(0, 0)
   }
@@ -97,7 +99,7 @@ function App() {
       </div>
       <ErrorNotice />
       {view === 'home' && <Home data={data} month={month} go={go} />}
-      {view === 'planning' && <Planning key={month} data={data} month={month} save={save} />}
+      {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section={planningView} setSection={setPlanningView} />}
       {(view === 'records' || view === 'receipt') && <Records key={view} mode={view === 'receipt' ? 'scan' : 'manual'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} onManual={() => go('records')} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}

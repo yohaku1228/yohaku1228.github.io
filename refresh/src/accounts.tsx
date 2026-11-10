@@ -2,16 +2,19 @@ import { useState } from 'react'
 import { accountProjection, activeFixed, cardBills, cashEvents, monthOf, onDay, today, yen } from './finance'
 import type { Ledger, Month, PaymentMethod, Transfer } from './model'
 import { SubAccount } from './sub-account'
-import { Amount, Field, form, Money, num, Panel, Stat, str, uid, type Save } from './ui'
+import { Amount, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
 export type AccountView = 'month' | 'year' | 'setup'
 export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; month: Month; save: Save; mode: AccountView; setMode: (mode: AccountView) => void }) {
   const [cardId, editCard] = useState<string | null>(null)
   const [transferVersion, bump] = useState(0)
+  const [editingTransfer, setEditingTransfer] = useState<string | null>(null)
   const card = data.payments.find(p => p.id === cardId)
   const events = cashEvents(data, month)
   const bills = cardBills(data).filter(b => monthOf(b.date) >= month || !b.paid)
   const fixed = activeFixed(data, month)
+  const transfers = data.transfers.filter(t => monthOf(t.date) === month)
+  const transferToEdit = transfers.find(t => t.id === editingTransfer)
   function toggle(id: string) {
     save(old => ({ ...old, settled: old.settled.includes(id) ? old.settled.filter(s => s !== id) : [...old.settled, id] }))
   }
@@ -33,7 +36,7 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
             </form>
           </div>
         })}</div>
-        {data.incomes.some(i => monthOf(i.date) === month && i.route === 'undecided') && <p className="notice">負担方法が未定の収入は、口座への入金見込みに含めていません。</p>}
+        {data.incomes.some(i => monthOf(i.date) === month && i.route !== 'deposit') && <p className="notice">口座残高に反映していない収入があります。「予算」の「収入」で入金先を確認できます。</p>}
       </Panel>
       <Panel title="カード別の引落予定" description="カード利用は利用月の生活費、引落は引落月の口座資金として集計します。">
         <ul className="rows">{bills.map(bill => {
@@ -122,23 +125,41 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
         })}</ul>{!fixed.length && <p className="empty">この月の固定費はありません。</p>}
       </Panel>
       <Panel title="口座間の移動" description="振込、貯蓄、取り崩しを記録します。生活費の支出には加えません。">
-        <form key={month + transferVersion} onSubmit={form(fields => {
+        <form id="transfer-form" key={month + transferVersion + (transferToEdit?.id ?? '')} onSubmit={form(fields => {
           const transfer: Transfer = {
-            id: uid(), from: str(fields, 'from'), to: str(fields, 'to'), date: str(fields, 'date'), amount: num(fields, 'amount'),
+            id: transferToEdit?.id ?? uid(), from: str(fields, 'from'), to: str(fields, 'to'), date: str(fields, 'date'), amount: num(fields, 'amount'),
             completed: fields.has('completed'), purpose: str(fields, 'purpose') as Transfer['purpose'],
           }
-          if (save(old => ({ ...old, transfers: [...old.transfers, transfer] }))) bump(v => v + 1)
+          if (save(old => ({ ...old, transfers: [...old.transfers.filter(row => row.id !== transfer.id), transfer] }))) {
+            setEditingTransfer(null)
+            bump(v => v + 1)
+          }
         })}>
           <div className="fields">
-            <Field label="日付"><input type="date" name="date" defaultValue={monthOf(today()) === month ? today() : onDay(month, 1)} required /></Field>
-            <Field label="金額"><Money name="amount" /></Field>
-            <Field label="振込元"><select name="from" defaultValue="main">{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-            <Field label="振込先"><select name="to" defaultValue="annual">{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-            <Field label="用途"><select name="purpose"><option value="transfer">振込</option><option value="savings">貯蓄</option><option value="withdrawal">取り崩し</option></select></Field>
+            <Field label="日付"><input type="date" name="date" defaultValue={transferToEdit?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} required /></Field>
+            <Field label="金額"><Money name="amount" value={transferToEdit?.amount} /></Field>
+            <Field label="振込元"><select name="from" defaultValue={transferToEdit?.from ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+            <Field label="振込先"><select name="to" defaultValue={transferToEdit?.to ?? 'annual'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+            <Field label="用途"><select name="purpose" defaultValue={transferToEdit?.purpose ?? 'transfer'}><option value="transfer">振込</option><option value="savings">貯蓄</option><option value="withdrawal">取り崩し</option></select></Field>
           </div>
-          <label className="check"><input name="completed" type="checkbox" /> 振込済み</label><div className="actions"><button className="primary">移動を登録</button></div>
+          <label className="check"><input name="completed" type="checkbox" defaultChecked={transferToEdit?.completed} /> 振込済み</label>
+          <div className="actions"><button className="primary">{transferToEdit ? '移動を更新' : '移動を登録'}</button>{transferToEdit && <button type="button" className="quiet" onClick={() => setEditingTransfer(null)}>取消</button>}</div>
         </form>
-        <ul className="rows">{data.transfers.filter(t => monthOf(t.date) === month).map(t => <li key={t.id}><span><b>{data.accounts.find(a => a.id === t.from)?.name} → {data.accounts.find(a => a.id === t.to)?.name}</b><small>{t.date} ・ {t.purpose === 'savings' ? '貯蓄' : t.purpose === 'withdrawal' ? '取り崩し' : '振込'}</small></span><Amount value={t.amount} /><label className="check"><input type="checkbox" checked={t.completed} onChange={() => save(old => ({ ...old, transfers: old.transfers.map(row => row.id === t.id ? { ...row, completed: !row.completed } : row) }))} /> 振込済み</label></li>)}</ul>
+        <ul className="rows">{transfers.map(t => <SwipeRow key={t.id} label="口座間の移動" onRemove={() => {
+          if (!window.confirm(`${t.date}の移動 ${yen(t.amount)} を削除しますか？`)) return
+          if (save(old => ({ ...old, transfers: old.transfers.filter(row => row.id !== t.id) })) && editingTransfer === t.id) setEditingTransfer(null)
+        }}>
+          <span><b>{data.accounts.find(a => a.id === t.from)?.name} → {data.accounts.find(a => a.id === t.to)?.name}</b><small>{t.date} ・ {t.purpose === 'savings' ? '貯蓄' : t.purpose === 'withdrawal' ? '取り崩し' : '振込'}</small></span>
+          <Amount value={t.amount} /><label className="check"><input type="checkbox" checked={t.completed} onChange={() => {
+            if (save(old => ({ ...old, transfers: old.transfers.map(row => row.id === t.id ? { ...row, completed: !row.completed } : row) })) && editingTransfer === t.id) {
+              setEditingTransfer(null)
+            }
+          }} /> 振込済み</label>
+          <button className="quiet" onClick={() => {
+            setEditingTransfer(t.id)
+            requestAnimationFrame(() => document.getElementById('transfer-form')?.scrollIntoView({ block: 'nearest' }))
+          }}>編集</button>
+        </SwipeRow>)}</ul>
       </Panel>
       </>}
     </>}
