@@ -147,7 +147,6 @@ function App() {
             { icon: ArrowLeftRight, label: accountTitles.payments, detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
             { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
-            { icon: Wallet, label: accountTitles.month, detail: '残高の見通し・口座間の移動', open: () => openAccount('month') },
           ] },
           { title: 'その他', items: [
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
