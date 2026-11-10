@@ -10,12 +10,9 @@ function QuickPurchase({ categories, current }: { categories: Ledger['categories
   const [store, setStore] = useState(current?.merchant ? stores.includes(current.merchant) ? current.merchant : 'other' : '')
   const allowance = categories.find(item => item.id === category)?.allowance
   return <>
-    <fieldset className="purchase-choice"><legend>変動費の項目</legend>
-      <div className="choices">{categories.map(item => <label key={item.id}>
-        <input type="radio" name="category" value={item.id} checked={category === item.id} onChange={() => setCategory(item.id)} />
-        <span>{item.name}</span>
-      </label>)}</div>
-    </fieldset>
+    <Field label="変動費の項目"><select name="category" value={category} onChange={event => setCategory(event.target.value)}>
+      {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </select></Field>
     {!allowance && <fieldset className="purchase-choice"><legend>店舗</legend>
       <div className="choices">{[...stores, 'other'].map(item => <label key={item}>
         <input type="radio" name="store" value={item} required checked={store === item} onChange={() => setStore(item)} />
@@ -83,7 +80,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
   return <div className="stack">
     {saved && <p className="save-success" role="status">支出を保存しました。</p>}
     {(mode === 'add' || current) && <section className="panel">
-      <h2>{current ? '支出を編集' : '買い物の合計を登録'}</h2>
+      {current && <h2>支出を編集</h2>}
       <form key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
         const categories = fields.getAll('category').map(String)
         const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
@@ -154,7 +151,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
         }
       })}>
         {!detailed && <QuickPurchase categories={data.categories} current={current} />}
-        <div className="fields">
+        <div className="fields purchase-meta">
           <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
           {detailed && <Field label="店舗名"><input name="merchant" defaultValue={current?.merchant} required maxLength={100} /></Field>}
           <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? cash.id}>
