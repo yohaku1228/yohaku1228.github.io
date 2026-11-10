@@ -52,7 +52,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
       {status === 'error' && <button className="quiet" onClick={retry}>保存を再試行</button>}
       {status === 'conflict' && <button className="quiet" onClick={() => {
         if (!window.confirm('未送信の変更をJSONに書き出し、クラウドの最新版を開き直しますか？')) return
-        download('家計とカード-未送信の変更.json', JSON.stringify(backup(useLedger.getState().ledger)), 'application/json')
+        download('MoneyFlow Manager-未送信の変更.json', JSON.stringify(backup(useLedger.getState().ledger)), 'application/json')
         localStorage.removeItem('household-pwa:pending:' + owner)
         reload(v => v + 1)
       }}>変更を保存して最新版を開く</button>}
@@ -71,7 +71,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
   </>
 
   return <main className="wrap">
-    <Panel title={owner === null ? '家計とカードにログイン' : '家計を読み込み中'}>
+    <Panel title={owner === null ? 'MoneyFlow Managerにログイン' : '家計を読み込み中'}>
       {owner === null && <form onSubmit={form(async fields => {
         setLoading(true)
         setMessage('')

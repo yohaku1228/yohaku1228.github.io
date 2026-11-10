@@ -114,7 +114,7 @@ function App() {
   const budgeting = view === 'planning' || view === 'fixed' || view === 'budget'
   const nav = budgeting ? 'planning' : tabs.some(t => t.id === view) ? view : 'more'
   return <>
-    <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
+    <header className="top"><div className="top-inner"><div className="brand">MoneyFlow Manager<small>{data.household.name}の家計</small></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
       <div className="page-head">
         <h1>{view === 'accounts' ? accountTitles[accountMode] : titles[view]}</h1>

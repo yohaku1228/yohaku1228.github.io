@@ -1,7 +1,7 @@
 {
   "id": "/refresh/",
-  "name": "家計とカード",
-  "short_name": "家計とカード",
+  "name": "MoneyFlow Manager",
+  "short_name": "MoneyFlow",
   "lang": "ja",
   "start_url": "/refresh/",
   "scope": "/refresh/",
