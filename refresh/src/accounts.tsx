@@ -67,7 +67,6 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
             </form>
           </div>
         })}</div>
-        {data.incomes.some(i => monthOf(i.date) === month && (i.route === 'direct' || i.route === 'undecided')) && <p className="notice">口座残高に反映していない収入があります。下の「収入」で入金先を確認できます。</p>}
       </Panel>
       <Panel title="カード別の引落予定" description="カード利用は利用月の生活費、引落は引落月の口座資金として集計します。">
         <ul className="rows">{bills.map(bill => {
@@ -140,7 +139,7 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
               <optgroup label="口座・現金">{data.accounts.map(a => <option key={a.id} value={'account:' + a.id}>{a.name}</option>)}</optgroup>
               <optgroup label="カード払い">{data.payments.filter(p => p.kind === 'card').map(p => <option key={p.id} value={'card:' + p.id}>{p.name} → {data.accounts.find(a => a.id === p.accountId)?.name}</option>)}</optgroup>
             </select>
-          </Field>)}</div> : <p className="empty">下の「支出」から「固定費」を開くと、項目を追加できます。</p>}
+          </Field>)}</div> : <p className="empty">下の「予算」から「固定費」を開くと、項目を追加できます。</p>}
         </Panel>
       </>}
       {mode === 'month' && <>

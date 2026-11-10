@@ -17,11 +17,14 @@ export function Planning({ data, month, save, section, openBudget }: {
   const fixedCard = data.payments.find(p => p.id === fixed?.cardPaymentId)
   const week = foodWeek(data, month, today())
   const previous = addMonths(month, -1)
-  const previousIncome = data.incomes.filter(i => i.date.startsWith(previous) && i.route === 'deposit')
+  const previousIncome = data.incomes.filter(i => i.date.startsWith(previous) && (i.route === 'deposit' || i.route === 'budget'))
   const budgets = data.budgets
   const currentBudget = budgetFor(data, month)
   const reserve = editingIncome === 'reserve' || income?.route === 'reserve'
   const parent = editingIncome === 'salary-a' ? data.users[0] : editingIncome === 'salary-b' ? data.users[1] : undefined
+  const salary = editingIncome === 'salary-a' || editingIncome === 'salary-b' || /^(?:(?:パパ|ママ|夫|妻)の)?給与$/.test(income?.label ?? '')
+  const fixedLabel = reserve ? income?.label ?? '予備費' : salary ? income?.label ?? '給与' : undefined
+  const parentName = (id: string) => id === data.users[0]?.id ? 'パパ' : id === data.users[1]?.id ? 'ママ' : '共通'
   const available = totals.income - totals.fixed
   const unassigned = available - (allocatedDraft ?? totals.allocated + currentBudget.plannedSavings)
   function openIncome(id: string) {
@@ -44,7 +47,7 @@ export function Planning({ data, month, save, section, openBudget }: {
       {incomes.length > 0 ? <>
         <p className="hint">左にスワイプ、または「…」で削除できます。</p>
         <ul className="rows">{incomes.map(item => <SwipeRow key={item.id} label={item.label} onRemove={() => removeIncome(item)}>
-          <span><b>{item.label}{item.userId && `（${data.users.find(user => user.id === item.userId)?.name ?? '共通'}）`}</b><small>{item.route === 'reserve' ? '今月の予算に充当' : `${item.date.slice(5).replace('-', '/')} ・ ${item.route === 'deposit' ? data.accounts.find(a => a.id === item.accountId)?.name : '口座残高への反映なし'} ・ ${item.actual === null ? '見込み' : '確定'}`}</small></span>
+          <span><b>{item.label.replace(/^(夫|妻)の給与$/, match => match.startsWith('夫') ? 'パパの給与' : 'ママの給与')}{item.userId && !/の給与$/.test(item.label) && `（${parentName(item.userId)}）`}</b><small>{item.route === 'reserve' ? '今月の予算に充当' : item.actual === null ? '見込み' : '確定'}</small></span>
           <Amount value={item.actual ?? item.forecast} /><button className="quiet" onClick={() => openIncome(item.id)}>編集</button>
         </SwipeRow>)}</ul>
       </> : <p className="empty">この月の収入はまだありません。</p>}
@@ -58,32 +61,30 @@ export function Planning({ data, month, save, section, openBudget }: {
       <div className="actions">
         {!editingIncome && incomes.length === 0 && previousIncome.length > 0 && <button className="quiet" onClick={() => save(old => {
           if (old.incomes.some(item => item.date.startsWith(month))) return old
-          return { ...old, incomes: [...old.incomes, ...previousIncome.map(i => ({ ...i, id: uid(), date: onDay(month, Number(i.date.slice(8))), forecast: i.actual ?? i.forecast, actual: null }))] }
-        })}>前月の入金をコピー</button>}
+          return { ...old, incomes: [...old.incomes, ...previousIncome.map(i => ({ ...i, id: uid(), date: onDay(month, 1), route: 'budget' as const, forecast: i.actual ?? i.forecast, actual: null }))] }
+        })}>前月の収入をコピー</button>}
       </div>
       {editingIncome && <form id="income-form" key={editingIncome} onSubmit={form(fields => {
         const record: Income = {
-          id: income?.id ?? uid(), label: str(fields, 'label'), userId: str(fields, 'user') || undefined,
-          date: onDay(month, reserve ? 1 : num(fields, 'day')), forecast: num(fields, 'forecast'), actual: str(fields, 'actual') === '' ? null : num(fields, 'actual'),
-          route: reserve ? 'reserve' : 'deposit', accountId: reserve ? 'main' : str(fields, 'account'),
+          id: income?.id ?? uid(), label: fixedLabel ?? str(fields, 'label'), userId: parent?.id ?? (str(fields, 'user') || undefined),
+          date: income?.date ?? onDay(month, 1), forecast: num(fields, 'forecast'), actual: str(fields, 'actual') === '' ? null : num(fields, 'actual'),
+          route: income?.route ?? (reserve ? 'reserve' : 'budget'), accountId: income?.accountId ?? 'main',
         }
-        const duplicate = incomes.some(item => item.id !== record.id && item.userId === record.userId && item.date === record.date &&
-          item.accountId === record.accountId && item.label.normalize('NFKC') === record.label.normalize('NFKC') &&
+        const duplicate = incomes.some(item => item.id !== record.id && item.userId === record.userId &&
+          item.label.normalize('NFKC') === record.label.normalize('NFKC') &&
           (item.actual ?? item.forecast) === (record.actual ?? record.forecast))
-        if (duplicate && !window.confirm('同じ日・金額・入金先の収入があります。別の入金として保存しますか？')) return
+        if (duplicate && !window.confirm('今月に同じ項目・金額の収入があります。もう1件保存しますか？')) return
         if (save(old => ({ ...old, incomes: [...old.incomes.filter(i => i.id !== record.id), record] }))) setEditingIncome(null)
       })}>
+        {fixedLabel && <h3>{parent ? parentName(parent.id) + 'の給与' : fixedLabel}</h3>}
         <div className="fields">
-          <Field label="項目"><input name="label" defaultValue={income?.label ?? (reserve ? '予備費' : parent ? '給与' : '')} required maxLength={100} /></Field>
+          {!fixedLabel && <Field label="項目"><input name="label" defaultValue={income?.label ?? ''} required maxLength={100} /></Field>}
           {reserve ? <Field label="今月使う金額（円）"><Money name="forecast" value={income?.forecast} /></Field> : <>
-          <Field label="誰の収入"><select name="user" defaultValue={income?.userId ?? parent?.id ?? ''}><option value="">共通</option>{data.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
-          <Field label="入金日（日）"><input type="number" name="day" min="1" max="31" defaultValue={income ? Number(income.date.slice(8)) : 25} required /></Field>
+          {!parent && <Field label="誰の収入"><select name="user" defaultValue={income?.userId ?? ''}><option value="">共通</option>{data.users.map(u => <option key={u.id} value={u.id}>{parentName(u.id)}</option>)}</select></Field>}
           <Field label="見込み（円）"><Money name="forecast" value={income?.forecast} /></Field>
           <Field label="確定額（空欄は未確定）"><Money name="actual" value={income?.actual} required={false} /></Field>
-          <Field label="入金先"><select name="account" defaultValue={income?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
           </>}
         </div>
-        {income && !reserve && income.route !== 'deposit' && <p className="notice">保存すると選んだ口座への入金として扱います。</p>}
         <div className="actions"><button className="primary">{income ? '収入を更新' : '収入を保存'}</button><button type="button" className="quiet" onClick={() => setEditingIncome(null)}>取消</button></div>
       </form>}
     </Panel>}

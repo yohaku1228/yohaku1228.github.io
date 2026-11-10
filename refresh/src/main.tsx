@@ -15,17 +15,17 @@ import './style.css'
 
 const tabs = [
   { id: 'home', name: 'ホーム', icon: House },
-  { id: 'planning', name: '収入', icon: Wallet },
+  { id: 'planning', name: '予算', icon: Wallet },
   { id: 'add', name: '支出を追加', icon: Plus },
-  { id: 'records', name: '支出', icon: PencilLine },
+  { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
 type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'accounts' | 'analysis' | 'settings'
-const spendingSections = [
-  { id: 'records', label: '記録・履歴' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
+const budgetSections = [
+  { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
-  home: '今月の家計', planning: '今月の収入', records: '支出の履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
+  home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
@@ -111,8 +111,8 @@ function App() {
     setAccountMode(mode)
     go('accounts')
   }
-  const spending = view === 'records' || view === 'fixed' || view === 'budget'
-  const nav = spending ? 'records' : tabs.some(t => t.id === view) ? view : 'more'
+  const budgeting = view === 'planning' || view === 'fixed' || view === 'budget'
+  const nav = budgeting ? 'planning' : tabs.some(t => t.id === view) ? view : 'more'
   return <>
     <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
@@ -124,18 +124,16 @@ function App() {
       </div>
       <ErrorNotice />
       {view === 'home' && <Home key={month} data={data} month={month} go={go} openPayments={() => openAccount('payments')} />}
-      {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section="income" />}
-      {spending && <nav className="picker-row" aria-label="支出の切り替え">
-        <Field label="支出メニュー"><select value={view} onChange={event => {
-          const next = spendingSections.find(item => item.id === event.target.value)
+      {budgeting && <nav className="picker-row" aria-label="予算の切り替え">
+        <Field label="予算メニュー"><select value={view} onChange={event => {
+          const next = budgetSections.find(item => item.id === event.target.value)
           if (next) go(next.id)
-        }}>{spendingSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+        }}>{budgetSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
       </nav>}
-      {(view === 'fixed' || view === 'budget') && <Planning key={month} data={data} month={month} save={save} section={view}
+      {budgeting && <Planning key={month} data={data} month={month} save={save} section={view === 'planning' ? 'income' : view}
         openBudget={() => go('budget')} />}
       {view === 'records' && <div className="actions">
         <button className="primary" onClick={() => go('add')}><Plus size={17} /> 買い物を追加</button>
-        <button className="quiet" onClick={() => openAccount('payments')}><CreditCard size={17} /> 銀行別の引落・現金支払い</button>
       </div>}
       {(view === 'records' || view === 'add') && <Records key={view} mode={view === 'add' ? 'add' : 'history'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
@@ -145,19 +143,15 @@ function App() {
       {view === 'settings' && <Settings data={data} save={save} />}
       {view === 'more' && <div className="stack">
         {[
-          { title: '記録する', items: [
-            { icon: PencilLine, label: '支出の記録・履歴', detail: '支払合計を登録・編集する', open: () => go('records') },
-            { icon: Wallet, label: '給与・予備費を入力', detail: '今月の収入の追加・編集', open: () => go('planning') },
-          ] },
-          { title: '確認する', items: [
+          { title: '引落・口座', items: [
             { icon: ArrowLeftRight, label: '銀行別の引落・現金支払い', detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
-            { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
-            { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
+            { icon: CreditCard, label: '引落口座の設定', detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
             { icon: Landmark, label: 'サブ口座', detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
-          { title: '設定する', items: [
-            { icon: CreditCard, label: '引落口座の設定', detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
+          { title: 'その他', items: [
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
+            { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
+            { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
           ] },
         ].map(group => <section className="menu-section" key={group.title}>
           <h2>{group.title}</h2>
