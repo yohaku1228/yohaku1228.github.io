@@ -82,11 +82,6 @@ input[type=checkbox] { appearance: auto; accent-color: var(--blue); width: 18px;
 .swipe-row[data-open=true] .swipe-content { padding-inline-end: 64px; }
 .swipe-delete { position: absolute; inset: 0 0 0 auto; width: 58px; background: #a1323c; color: #fff; font-size: 13px; font-weight: 750; }
 .rows .row-more { min-width: 42px; }
-.plan-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.plan-flow button { display: grid; gap: 4px; align-content: center; min-height: 64px; padding: 7px; border-radius: 12px; background: #fff; border: 1px solid var(--border); text-align: left; overflow-wrap: anywhere; }
-.plan-flow button[aria-pressed=true] { background: #dfedfd; border-color: #80a7d1; color: #1b4e89; }
-.plan-flow small { font-size: 11px; font-weight: 750; }
-.plan-flow .amount { font-size: clamp(13px, 4vw, 22px); font-weight: 800; }
 .budget-names { padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 12px; background: #f8fbff; }
 .budget-names legend { padding-inline: 5px; font-weight: 750; font-size: 13px; }
 .focus-budgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }

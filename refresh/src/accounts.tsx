@@ -133,7 +133,7 @@ export function Accounts({ data, month, save, mode, setMode }: { data: Ledger; m
               <optgroup label="口座・現金">{data.accounts.map(a => <option key={a.id} value={'account:' + a.id}>{a.name}</option>)}</optgroup>
               <optgroup label="カード払い">{data.payments.filter(p => p.kind === 'card').map(p => <option key={p.id} value={'card:' + p.id}>{p.name} → {data.accounts.find(a => a.id === p.accountId)?.name}</option>)}</optgroup>
             </select>
-          </Field>)}</div> : <p className="empty">固定費は下の「予算」から追加できます。</p>}
+          </Field>)}</div> : <p className="empty">下の「支出」から「固定費」を開くと、項目を追加できます。</p>}
         </Panel>
       </>}
       {mode === 'month' && <>

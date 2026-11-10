@@ -5,7 +5,7 @@ import { Accounts, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled, getFoodAdvice } from './cloud'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
-import { Planning, type PlanningView } from './planning'
+import { Planning } from './planning'
 import { Calendar, Records } from './records'
 import { Analysis, ErrorNotice, Settings } from './settings'
 import { useLedger } from './storage'
@@ -20,14 +20,14 @@ const tabs = [
   { id: 'records', name: '支出', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
-type View = typeof tabs[number]['id'] | 'calendar' | 'accounts' | 'analysis' | 'settings'
+type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'accounts' | 'analysis' | 'settings'
 const titles: Record<View, string> = {
-  home: '今月の家計', planning: '今月の予算を決める', records: '支出を記録', receipt: 'レシート読み取り',
+  home: '今月の家計', planning: '今月の収入', records: '支出を記録', fixed: '固定費', budget: '変動費予算', receipt: 'レシート読み取り',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
 function Home({ data, month, go, openPayments }: {
-  data: Ledger; month: string; go: (view: View, section?: PlanningView) => void; openPayments: () => void
+  data: Ledger; month: string; go: (view: View) => void; openPayments: () => void
 }) {
   const totals = monthly(data, month)
   const date = today()
@@ -82,7 +82,7 @@ function Home({ data, month, go, openPayments }: {
     </Panel>}
     <Panel title="今月の変動費">
       <div className="stats"><Stat label="収入から固定費を引いた額" value={hasIncome ? totals.income - totals.fixed : null} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
-      <button className="quiet" onClick={() => go('planning', hasIncome ? 'budget' : 'income')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
+      <button className="quiet" onClick={() => go(hasIncome ? 'budget' : 'planning')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
     </Panel>
     <button className="quiet bank-entry" onClick={openPayments}><CreditCard size={18} /> 銀行別の引落・現金支払い <ArrowRight size={16} /></button>
     <Panel title="変動費の内訳">
@@ -97,12 +97,10 @@ function App() {
   const save = useLedger(s => s.update)
   const [month, setMonth] = useState(() => monthOf(today()))
   const [view, setView] = useState<View>('home')
-  const [planningView, setPlanningView] = useState<PlanningView>('income')
   const [accountMode, setAccountMode] = useState<AccountView>('payments')
   const [editing, setEditing] = useState<string | null>(null)
-  function go(next: View, section: PlanningView = 'income') {
+  function go(next: View) {
     if (next === 'records' || next === 'receipt') setEditing(null)
-    if (next === 'planning') setPlanningView(section)
     setView(next)
     window.scrollTo(0, 0)
   }
@@ -110,7 +108,8 @@ function App() {
     setAccountMode(mode)
     go('accounts')
   }
-  const nav = tabs.some(t => t.id === view) ? view : 'more'
+  const spending = view === 'records' || view === 'fixed' || view === 'budget'
+  const nav = spending ? 'records' : tabs.some(t => t.id === view) ? view : 'more'
   return <>
     <header className="top"><div className="top-inner"><div className="brand"><img src={import.meta.env.BASE_URL + 'icons/icon-192.png'} alt="" /><span>家計とカード<small>{data.household.name}の家計</small></span></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
     <main className="wrap">
@@ -122,7 +121,14 @@ function App() {
       </div>
       <ErrorNotice />
       {view === 'home' && <Home key={month} data={data} month={month} go={go} openPayments={() => openAccount('payments')} />}
-      {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section={planningView} setSection={setPlanningView} />}
+      {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section="income" />}
+      {spending && <nav className="actions" aria-label="支出の切り替え">
+        {([{ id: 'records', label: '記録・履歴' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' }] as const)
+          .map(item => <button key={item.id} className={view === item.id ? 'primary' : 'quiet'} aria-pressed={view === item.id}
+            onClick={() => { if (view !== item.id) go(item.id) }}>{item.label}</button>)}
+      </nav>}
+      {(view === 'fixed' || view === 'budget') && <Planning key={month} data={data} month={month} save={save} section={view}
+        openBudget={() => go('budget')} />}
       {view === 'records' && <div className="actions">
         <button className="quiet" onClick={() => openAccount('payments')}><CreditCard size={17} /> 銀行別の引落・現金支払い</button>
       </div>}
@@ -136,7 +142,7 @@ function App() {
         {[
           { title: '記録する', items: [
             { icon: PencilLine, label: '支出の手入力・履歴', detail: '買い物を登録・編集する', open: () => go('records') },
-            { icon: Wallet, label: '給与・予算を入力', detail: '収入・生活費・固定費', open: () => go('planning') },
+            { icon: Wallet, label: '給与・予備費を入力', detail: '今月の収入の追加・編集', open: () => go('planning') },
           ] },
           { title: '確認する', items: [
             { icon: ArrowLeftRight, label: '銀行別の引落・現金支払い', detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },

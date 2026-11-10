@@ -3,13 +3,8 @@ import { activeFixed, addMonths, budgetFor, foodWeek, monthly, onDay, today, yen
 import type { FixedExpense, Income, Ledger, Month } from './model'
 import { Amount, BudgetRow, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
-const sections = [
-  { id: 'income', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
-] as const
-export type PlanningView = typeof sections[number]['id']
-
-export function Planning({ data, month, save, section, setSection }: {
-  data: Ledger; month: Month; save: Save; section: PlanningView; setSection: (section: PlanningView) => void
+export function Planning({ data, month, save, section, openBudget }: {
+  data: Ledger; month: Month; save: Save; section: 'income' | 'fixed' | 'budget'; openBudget?: () => void
 }) {
   const totals = monthly(data, month)
   const [editingIncome, setEditingIncome] = useState<string | null>(null)
@@ -29,7 +24,6 @@ export function Planning({ data, month, save, section, setSection }: {
   const parent = editingIncome === 'salary-a' ? data.users[0] : editingIncome === 'salary-b' ? data.users[1] : undefined
   const available = totals.income - totals.fixed
   const unassigned = available - (allocatedDraft ?? totals.allocated + currentBudget.plannedSavings)
-  const stepAmounts = { income: totals.income, fixed: totals.fixed, budget: available }
   function openIncome(id: string) {
     setEditingIncome(id)
     requestAnimationFrame(() => document.getElementById('income-form')?.scrollIntoView({ block: 'nearest' }))
@@ -45,11 +39,7 @@ export function Planning({ data, month, save, section, setSection }: {
     }
   }
   return <div className="stack">
-    <nav className="plan-flow" aria-label="月の予算を決める順番">{sections.map((item, index) =>
-      <button key={item.id} aria-label={item.label} aria-pressed={section === item.id}
-        onClick={() => setSection(item.id)}><small>{index + 1} {item.label}</small><Amount value={stepAmounts[item.id]} /></button>
-    )}</nav>
-    <div hidden={section !== 'income'}><Panel title="今月の給与・予備費" description="パパとママの給与見込みと、今月の生活費に回す予備費を入れます。">
+    {section === 'income' && <Panel title="今月の給与・予備費" description="パパとママの給与見込みと、今月の生活費に回す予備費を入れます。">
       <div className="stats"><Stat label="今月の収入（見込みを含む）" value={totals.income} /><Stat label="確定した収入" value={incomes.reduce((total, item) => total + (item.actual ?? 0), 0)} /></div>
       {incomes.length > 0 ? <>
         <p className="hint">左にスワイプ、または「…」で削除できます。</p>
@@ -95,9 +85,8 @@ export function Planning({ data, month, save, section, setSection }: {
         {income && !reserve && income.route !== 'deposit' && <p className="notice">保存すると選んだ口座への入金として扱います。</p>}
         <div className="actions"><button className="primary">{income ? '収入を更新' : '収入を保存'}</button><button type="button" className="quiet" onClick={() => setEditingIncome(null)}>取消</button></div>
       </form>}
-      {!editingIncome && incomes.length > 0 && <button className="quiet" onClick={() => setSection('fixed')}>次へ：固定費を確認</button>}
-    </Panel></div>
-    <div className="stack" hidden={section !== 'budget'}>
+    </Panel>}
+    {section !== 'income' && <div className="stack" hidden={section !== 'budget'}>
     <div className="stats"><Stat label="変動費に使える額" value={available} /><Stat label={unassigned < 0 ? '配分オーバー' : 'あと配分できる額'} value={Math.abs(unassigned)} /></div>
     <Panel title="変動費を配分する" description="同じ月の予算は、金額を変えて保存し直せます。">
       <form key={month + JSON.stringify(currentBudget)} onInput={event => {
@@ -142,12 +131,12 @@ export function Planning({ data, month, save, section, setSection }: {
       <div className="stats"><Stat label="週間予算" value={week.allocated} /><Stat label="使用額" value={week.spent} /><Stat label="週間残り" value={week.remaining} /><Stat label="1日あたり" value={week.daily} /></div>
       <p className="hint">週間予算は月間食費の内訳です。1日あたりの目安は、月間の残額を上限に計算します。</p>
     </Panel>
-    </div>
-    <div hidden={section !== 'fixed'}><Panel title="固定費" description="登録した期間だけ毎月の予算に反映します。支払いが終わったら「編集」で終了月を入力します。">
+    </div>}
+    {section !== 'income' && <div hidden={section !== 'fixed'}><Panel title="固定費" description="登録した期間だけ毎月の予算に反映します。支払いが終わったら「編集」で終了月を入力します。">
       <div className="stats"><Stat label="今月の固定費" value={totals.fixed} detail={totals.asset ? `うち積立 ${yen(totals.asset)}` : undefined} /></div>
       <ul className="rows">{data.fixed.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.kind === 'asset' ? '積立 ・ ' : ''}{item.dueDay ? `${item.dueDay}日` : '引落日なし'}{item.endMonth ? ` ・ ${item.endMonth}まで` : ''}</small></span><Amount value={item.amount} /><button className="quiet" onClick={() => openFixed(item.id)}>編集</button></li>)}</ul>
       {!editingFixed && <div className="actions"><button className="quiet" onClick={() => openFixed('new')}>＋ 固定費を追加</button>
-        <button className="primary" onClick={() => setSection('budget')}>次へ：変動費を配分</button></div>}
+        <button className="primary" onClick={openBudget}>変動費を配分</button></div>}
       {editingFixed && <form id="fixed-form" key={editingFixed} onSubmit={form(fields => {
         const record: FixedExpense = {
           id: fixed?.id ?? uid(), name: str(fields, 'name'), amount: num(fields, 'amount'), accountId: str(fields, 'account'),
@@ -172,6 +161,6 @@ export function Planning({ data, month, save, section, setSection }: {
         <div className="actions"><button className="primary">{fixed ? '固定費を更新' : '固定費を保存'}</button><button type="button" className="quiet" onClick={() => setEditingFixed(null)}>取消</button></div>
       </form>}
       <p className="hint">この月の対象 {activeFixed(data, month).length}件</p>
-    </Panel></div>
+    </Panel></div>}
   </div>
 }
