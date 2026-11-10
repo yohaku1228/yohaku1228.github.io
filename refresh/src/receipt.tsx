@@ -9,6 +9,7 @@ const scanSchema = z.object({
   merchant: z.string().trim().max(100).nullable(),
   date: z.string().nullable(),
   total: money.nullable(),
+  externalTax: money.min(0).nullable().optional(),
   items: z.array(z.object({ name: z.string().trim().max(100), amount: money.nullable(), discount: money.nullable() })).min(1).max(100),
 })
 export type ReceiptScan = z.infer<typeof scanSchema> & { fingerprint: string }
@@ -68,6 +69,11 @@ export function ReceiptReader({ onRead, seen }: { onRead: (scan: ReceiptScan) =>
         let jpeg: Blob
         try { jpeg = await prepareImage(file) } catch { throw new Error('画像を開けません。20MB以下のJPEGやPNGでお試しください。') }
         const parsed = scanSchema.parse(await readReceipt(jpeg, AbortSignal.timeout(35_000)))
+        const tax = parsed.externalTax
+        if (tax && parsed.total !== null && parsed.items.every(item => item.amount !== null)) {
+          const subtotal = parsed.items.reduce((sum, item) => sum + (item.amount ?? 0) - (item.discount ?? 0), 0)
+          if (subtotal + tax === parsed.total) parsed.items.push({ name: '外税', amount: tax, discount: 0 })
+        }
         const date = parsed.date
         if (date && (!/^20\d{2}-(0[1-9]|1[0-2])-\d{2}$/.test(date) ||
             Number(date.slice(8)) < 1 || Number(date.slice(8)) > daysInMonth(monthOf(date)))) parsed.date = null
