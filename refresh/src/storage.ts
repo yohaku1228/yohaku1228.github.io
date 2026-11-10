@@ -92,30 +92,15 @@ export const planSchema: z.ZodType<Plan> = z.object({
   fixed: records(fixed), annual: records(annual), milestones: records(milestone),
 })
 const backupSchema = z.object({ format: z.literal('household-pwa-v1'), ledger: ledgerSchema })
-const legacySchema = z.object({
-  format: z.literal('finance-unified-v1'),
-  data: z.object({
-    kakeibo_data_v5: z.object({ monthlyData: legacyMonths }).nullable(),
-    rakuten_alert_checker_v3: z.object({ transactions: z.array(z.unknown()) }).nullable(),
-  }),
-})
 const key = 'household-pwa:ledger:v1'
 export const backup = (ledger: Ledger) => ({ format: 'household-pwa-v1' as const, exportedAt: new Date().toISOString(), ledger })
 
 export function inspectImport(value: unknown) {
-  const legacy = legacySchema.safeParse(value)
-  if (legacy.success) {
-    const archive = {
-      months: legacy.data.data.kakeibo_data_v5?.monthlyData ?? {},
-      rakutenCount: legacy.data.data.rakuten_alert_checker_v3?.transactions.length ?? 0,
-    }
-    return { type: 'legacy' as const, archive }
-  }
   const saved = backupSchema.safeParse(value)
   if (saved.success) return { type: 'backup' as const, ledger: saved.data.ledger }
   const plan = z.object({ format: z.literal('household-phase1-plan-v1'), plan: planSchema }).safeParse(value)
   if (plan.success) return { type: 'plan' as const, plan: plan.data.plan }
-  throw new Error('ファイルの形式または金額を確認してください。')
+  throw new Error('「家計とカード」のバックアップ、または初期設定のJSONファイルを選んでください。')
 }
 
 interface LedgerRepository {
