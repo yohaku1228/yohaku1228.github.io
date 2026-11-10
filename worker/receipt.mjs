@@ -1,4 +1,4 @@
-const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
+export const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
 const maxImage = 3 * 1024 * 1024
 const integer = { type: ['integer', 'null'] }
 const text = { type: ['string', 'null'] }
@@ -69,7 +69,7 @@ export function createReceiptHandler({ origin, apiKey, takeQuota, freeTierConfir
       }
       stage = 'gemini_request'
       const signal = AbortSignal.timeout(25_000)
-      const send = (structured) => upstream(endpoint, {
+      const send = (structured) => upstream(geminiEndpoint, {
         method: 'POST',
         // Do not forward the API key to a redirect target.
         redirect: 'manual',

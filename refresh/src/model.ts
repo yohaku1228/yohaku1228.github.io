@@ -7,7 +7,7 @@ export interface User { id: Id; name: string; householdId: Id }
 export interface Account { id: Id; name: string; kind: 'main' | 'annual'; openingBalances: Record<Month, Yen> }
 export interface Income {
   id: Id; label: string; userId?: Id; date: Day; forecast: Yen; actual: Yen | null
-  route: 'deposit' | 'direct' | 'undecided'; accountId: Id
+  route: 'deposit' | 'reserve' | 'direct' | 'undecided'; accountId: Id
 }
 export interface Category { id: Id; name: string; color: string; allowance?: boolean }
 export interface Budget { month: Month; amounts: Record<Id, Yen>; plannedSavings: Yen }

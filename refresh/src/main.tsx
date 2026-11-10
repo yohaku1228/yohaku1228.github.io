@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, ScanLine, Settings2, Wallet } from 'lucide-react'
 import { Accounts, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
-import { cloudEnabled } from './cloud'
-import { accountProjection, addMonths, annualSummary, cardBills, cashEvents, foodWeek, monthly, monthOf, subAccountForecast, today, yen } from './finance'
+import { cloudEnabled, getFoodAdvice } from './cloud'
+import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning, type PlanningView } from './planning'
 import { Calendar, Records } from './records'
 import { Analysis, ErrorNotice, Settings } from './settings'
@@ -22,49 +22,66 @@ const tabs = [
 ] as const
 type View = typeof tabs[number]['id'] | 'records' | 'accounts' | 'analysis' | 'settings'
 const titles: Record<View, string> = {
-  home: '今月の家計', planning: '予算と収入', records: '支出を記録', receipt: 'レシート読み取り',
+  home: '今月の家計', planning: '今月の予算を決める', records: '支出を記録', receipt: 'レシート読み取り',
   calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
 function Home({ data, month, go }: { data: Ledger; month: string; go: (view: View, section?: PlanningView) => void }) {
   const totals = monthly(data, month)
-  const annual = annualSummary(data, Number(month.slice(0, 4)))
-  const week = foodWeek(data, month, today())
-  const account = data.accounts.find(a => a.id === 'main')!
-  const projection = accountProjection(account, cashEvents(data, month), month)
-  const bill = cardBills(data).find(b => !b.paid && b.amount !== 0)
-  const ratio = totals.allocated > 0 ? Math.round(totals.spent / totals.allocated * 100) : null
-  const needsSetup = !data.budgets.length && !data.fixed.length && !data.incomes.length && !Object.keys(data.defaultBudget).length
+  const date = today()
+  const current = month === monthOf(date)
+  const week = foodWeek(data, month, date)
+  const days = daysInMonth(month)
+  const elapsed = current ? Number(date.slice(8)) : 0
+  const daysLeft = days - elapsed + 1
+  const foodBudget = totals.budget.amounts.food ?? 0
+  const foodSpent = totals.categorySpend.food ?? 0
+  const dayGuide = Math.floor(Math.max(0, foodBudget - foodSpent) / daysLeft)
+  const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining: week.remaining, daysLeft, dayGuide }
+  const requestKey = JSON.stringify(snapshot)
+  const [advice, setAdvice] = useState<{ key: string; text: string; error?: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
   const hasIncome = data.incomes.some(income => monthOf(income.date) === month)
-  const sub = subAccountForecast(data, month)
-  const hint = totals.remaining < 0 ? `生活費が予算を ${yen(-totals.remaining)} 超えています。「予算」で増えた項目を確認できます。`
-    : sub.shortage ? `サブ口座は、登録済みの予定に対して ${yen(sub.shortage)} 不足する見込みです。`
-    : bill ? `次の未確認のカード引落は ${bill.date}、${yen(bill.amount)} です。カード会社の請求額と照合できます。`
-    : hasIncome ? `今月の生活費予算はあと ${yen(totals.remaining)} です。次の大きな支払いをサブ口座に登録しておくと、必要な残高が見えます。`
-    : '給与・生活費予算・サブ口座の予定を登録すると、残高や支払いのヒントが表示されます。'
+  const foodAlert = foodBudget > 0 && foodSpent > foodBudget ? `食費が予算を ${yen(foodSpent - foodBudget)} 超えています。`
+    : foodBudget > 0 && foodSpent === foodBudget ? '食費が今月の予算に達しました。'
+    : foodBudget > 0 && foodSpent / foodBudget >= 0.8 ? '食費は予算の80％以上を使っています。'
+    : current && foodBudget > 0 && foodSpent > foodBudget * elapsed / days * 1.15 ? '食費が月の日数に対して早めのペースです。' : ''
   return <div className="stack">
-    {needsSetup && <section className="onboarding"><div><b>まず、今月の計画を設定</b><p>給与・固定費・生活費の予算を登録できます。</p></div><button className="quiet" onClick={() => go('planning')}>予算へ <ArrowRight size={16} /></button></section>}
-    <section className="hero">
-      <span className="hero-label"><Wallet size={17} /> あと使える生活費</span>
-      <strong className="hero-amount">{yen(totals.remaining)}</strong>
-      <div className="hero-meta"><span>予算 {yen(totals.allocated)}</span><span>消化率 {ratio === null ? '—' : `${ratio}%`}</span></div>
-      <progress aria-label="生活費の予算消化率" max="100" value={Math.max(0, Math.min(100, ratio ?? 0))} />
+    <section className="focus-budgets" aria-label="今月の食費とお菓子代">
+      {([{ id: 'food', label: '食費' }, { id: 'snacks', label: 'お菓子・ジュース' }]).map(({ id, label }) => {
+        const budget = totals.budget.amounts[id] ?? 0
+        const spent = totals.categorySpend[id] ?? 0
+        return <article className={id === 'food' ? 'focus-budget focus-food' : 'focus-budget'} key={id}>
+          <h2>{label}</h2>
+          <strong>{budget ? yen(budget - spent) : '予算未設定'}</strong>
+          <p>{budget > 0 && (spent > budget ? 'マイナスは予算超過' : '今月の残り')}</p>
+          <p>予算 {yen(budget)} ／ 使用 {yen(spent)}</p>
+          {budget > 0 && <progress max={budget} value={Math.max(0, Math.min(budget, spent))} aria-label={label + 'の消化率'} />}
+        </article>
+      })}
     </section>
-    {!needsSetup && !hasIncome && <section className="onboarding"><div><b>この月の収入が未登録です</b><p>収入を登録すると、貯蓄と口座の見通しを計算できます。</p></div><button className="quiet" onClick={() => go('planning')}>収入を登録 <ArrowRight size={16} /></button></section>}
-    <div className="stats">
-      <Stat label="食費の残り" value={(totals.budget.amounts.food ?? 0) - (totals.categorySpend.food ?? 0)} />
-      <Stat label={month === monthOf(today()) ? '今日使える食費' : '月初の食費目安 / 日'} value={week.daily} detail={week.startDate.slice(5) + ' 〜 ' + week.endDate.slice(5)} />
-      <Stat label="貯蓄見込み" value={totals.savingsForecast} detail={`実績 ${yen(totals.savingsActual)}`} />
-      <Stat label="次回カード引落" value={bill?.amount ?? null} detail={bill ? bill.date : '未確認の引落なし'} />
-    </div>
-    <Panel title="口座の見通し">
-      <div className="stats"><Stat label="メイン口座の必要入金" value={projection.required} detail={projection.undated ? `別途、日付未定 ${yen(projection.undated)}` : '日付が決まった入出金で計算'} /><Stat label="サブ口座の年間黒字見込み" value={annual.surplus} /></div>
+    {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
+    {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
+    {current && foodBudget > 0 && <Panel title="食費のアドバイス">
+      <div className="stats"><Stat label="今日の買い物の目安" value={dayGuide} detail={`月末まで今日を含めて${daysLeft}日`} /><Stat label="今週の食費の残り" value={week.remaining} /></div>
+      {cloudEnabled && <>
+        <button className="quiet" disabled={busy || (advice?.key === requestKey && !advice.error)} onClick={async () => {
+          setBusy(true)
+          try { setAdvice({ key: requestKey, text: await getFoodAdvice(snapshot, AbortSignal.timeout(24_000)) }) }
+          catch (error) { setAdvice({ key: requestKey, text: error instanceof Error ? error.message : '助言を取得できませんでした。', error: true }) }
+          finally { setBusy(false) }
+        }}>{busy ? '助言を作成中…' : 'AIに食費のコツを聞く'}</button>
+        <p className="hint">押すと、食費の集計額と残り日数をGeminiに送ります。</p>
+        {advice?.key === requestKey && <p className={advice.error ? 'notice' : 'advice-result'} role="status">{advice.text}</p>}
+      </>}
+    </Panel>}
+    <Panel title="今月の変動費">
+      <div className="stats"><Stat label="収入から固定費を引いた額" value={hasIncome ? totals.income - totals.fixed : null} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
+      <button className="quiet" onClick={() => go('planning', hasIncome ? 'budget' : 'income')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
     </Panel>
-    <Panel title="家計のヒント"><p className="hint">{hint}</p></Panel>
-    <Panel title="生活費の内訳">
+    <Panel title="変動費の内訳">
       {data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}
       {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
-      <button className="quiet" onClick={() => go('planning', 'budget')}>生活費予算を開く <ArrowRight size={16} /></button>
     </Panel>
   </div>
 }
@@ -98,7 +115,7 @@ function App() {
         }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
       </div>
       <ErrorNotice />
-      {view === 'home' && <Home data={data} month={month} go={go} />}
+      {view === 'home' && <Home key={month} data={data} month={month} go={go} />}
       {view === 'planning' && <Planning key={month} data={data} month={month} save={save} section={planningView} setSection={setPlanningView} />}
       {(view === 'records' || view === 'receipt') && <Records key={view} mode={view === 'receipt' ? 'scan' : 'manual'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} onManual={() => go('records')} />}
@@ -111,12 +128,12 @@ function App() {
           { title: '記録する', items: [
             { icon: PencilLine, label: '支出の手入力・履歴', detail: '買い物を登録・編集する', open: () => go('records') },
             { icon: Wallet, label: '給与・予算を入力', detail: '収入・生活費・固定費', open: () => go('planning') },
-            { icon: Landmark, label: 'サブ口座の入出金', detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
           { title: '確認する', items: [
             { icon: ArrowLeftRight, label: '引落・振込を確認', detail: '銀行別の必要額・カード請求', open: () => openAccount('month') },
             { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
             { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
+            { icon: Landmark, label: 'サブ口座', detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
           { title: '設定する', items: [
             { icon: CreditCard, label: '引落口座の設定', detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },

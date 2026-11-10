@@ -1,4 +1,4 @@
-import { createReceiptHandler } from './receipt.mjs'
+import { createReceiptHandler, geminiEndpoint } from './receipt.mjs'
 
 const cookieName = '__Host-kakei-session'
 const sessionSeconds = 14 * 24 * 60 * 60
@@ -66,6 +66,38 @@ async function writeLedger(request, env) {
   return row ? json(200, { revision: row.revision }) : json(409, { error: '別の端末で更新されました。' })
 }
 
+async function takeGeminiQuota(env) {
+  return !!await env.DB.prepare(`insert into receipt_quota(day, calls) values (?, 1)
+    on conflict(day) do update set calls = calls + 1 where calls < 15 returning calls`)
+    .bind(new Date().toISOString().slice(0, 10)).first()
+}
+
+async function foodAdvice(request, env) {
+  const key = env.GEMINI_API_KEY?.trim()
+  if (!key || env.GEMINI_FREE_TIER_CONFIRMED !== 'true') return json(503, { error: 'AIの設定が完了していません。' })
+  const body = await readJson(request, 1024)
+  const { budget, spent, weekRemaining, daysLeft, dayGuide } = body ?? {}
+  if (![budget, spent, weekRemaining, daysLeft, dayGuide].every(value => Number.isSafeInteger(value) && Math.abs(value) <= 1_000_000_000) ||
+      budget < 1 || daysLeft < 1 || daysLeft > 31 || dayGuide < 0) {
+    return json(400, { error: '今月の食費予算を確認してください。' })
+  }
+  if (!await takeGeminiQuota(env)) return json(429, { error: '今日のAI利用上限に達しました。' })
+  const response = await fetch(geminiEndpoint, {
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20_000),
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: `5人家族向けに、今日から実行しやすい食費の工夫を日本語で2～3文、180字以内で提案してください。残日数が少ない、使いすぎ、予算内などの状況に応じてください。食事の量や必要な栄養は削らず、金額を新しく計算したり価格を推測したりしないでください。金額を挙げる場合は下記の数値だけ使ってください。Markdown不要。月間予算 ${budget}円、支出 ${spent}円、今週の残り ${weekRemaining}円、月末まで今日を含め ${daysLeft}日、今日の買い物の目安 ${dayGuide}円。` }] }],
+      generationConfig: { maxOutputTokens: 640 },
+    }),
+  })
+  if (response.status === 429) return json(429, { error: 'Geminiの利用上限に達しました。時間をおいてお試しください。' })
+  if (!response.ok) return json(502, { error: 'AIの助言を取得できませんでした。画面の食費の目安は引き続き使えます。' })
+  const candidate = (await response.json()).candidates?.[0]
+  const text = candidate?.content?.parts?.filter(part => !part.thought).map(part => part.text ?? '').join('').trim()
+  return candidate?.finishReason === 'STOP' && text && text.length <= 600
+    ? json(200, { text }) : json(502, { error: 'AIの助言を取得できませんでした。' })
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
@@ -86,11 +118,10 @@ export default {
         return json(200, row ? { revision: row.revision, ledger: JSON.parse(row.ledger) } : null)
       }
       if (url.pathname === '/api/ledger' && method === 'PUT') return await writeLedger(request, env)
+      if (url.pathname === '/api/food-advice' && method === 'POST') return await foodAdvice(request, env)
       if (url.pathname === '/api/receipt' && method === 'POST') return await createReceiptHandler({
         origin: url.origin, apiKey: env.GEMINI_API_KEY, freeTierConfirmed: env.GEMINI_FREE_TIER_CONFIRMED === 'true',
-        takeQuota: async () => !!await env.DB.prepare(`insert into receipt_quota(day, calls) values (?, 1)
-          on conflict(day) do update set calls = calls + 1 where calls < 15 returning calls`)
-          .bind(new Date().toISOString().slice(0, 10)).first(),
+        takeQuota: () => takeGeminiQuota(env),
       })(request)
       return json(404, { error: '操作が見つかりませんでした。' })
     } catch {

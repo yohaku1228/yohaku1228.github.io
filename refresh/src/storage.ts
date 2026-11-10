@@ -13,7 +13,7 @@ const month = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/)
 const day = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])-\d{2}$/)
   .refine(date => Number(date.slice(8)) >= 1 && Number(date.slice(8)) <= daysInMonth(monthOf(date)))
 const dayOfMonth = z.int().min(1).max(31)
-const route = z.enum(['deposit', 'direct', 'undecided'])
+const route = z.enum(['deposit', 'reserve', 'direct', 'undecided'])
 const amounts = z.record(id, amount)
 const fixed = z.object({
   id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(), cardPaymentId: id.optional(),

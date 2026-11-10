@@ -4,7 +4,7 @@ import type { FixedExpense, Income, Ledger, Month } from './model'
 import { Amount, BudgetRow, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
 const sections = [
-  { id: 'income', label: '収入' }, { id: 'budget', label: '生活費予算' }, { id: 'fixed', label: '固定費' },
+  { id: 'income', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 export type PlanningView = typeof sections[number]['id']
 
@@ -14,6 +14,7 @@ export function Planning({ data, month, save, section, setSection }: {
   const totals = monthly(data, month)
   const [editingIncome, setEditingIncome] = useState<string | null>(null)
   const [editingFixed, setEditingFixed] = useState<string | null>(null)
+  const [allocatedDraft, setAllocatedDraft] = useState<number | null>(null)
   const incomes = data.incomes.filter(i => i.date.startsWith(month))
   const income = incomes.find(i => i.id === editingIncome)
   const fixed = data.fixed.find(i => i.id === editingFixed)
@@ -23,6 +24,11 @@ export function Planning({ data, month, save, section, setSection }: {
   const previousIncome = data.incomes.filter(i => i.date.startsWith(previous) && i.route === 'deposit')
   const budgets = data.budgets
   const currentBudget = budgetFor(data, month)
+  const reserve = editingIncome === 'reserve' || income?.route === 'reserve'
+  const parent = editingIncome === 'salary-a' ? data.users[0] : editingIncome === 'salary-b' ? data.users[1] : undefined
+  const available = totals.income - totals.fixed
+  const unassigned = available - (allocatedDraft ?? totals.allocated + currentBudget.plannedSavings)
+  const stepAmounts = { income: totals.income, fixed: totals.fixed, budget: available }
   function openIncome(id: string) {
     setEditingIncome(id)
     requestAnimationFrame(() => document.getElementById('income-form')?.scrollIntoView({ block: 'nearest' }))
@@ -38,21 +44,26 @@ export function Planning({ data, month, save, section, setSection }: {
     }
   }
   return <div className="stack">
-    <nav className="planning-tabs" aria-label="予算と収入の切り替え">{sections.map(item =>
-      <button key={item.id} className={section === item.id ? 'primary' : 'quiet'} aria-pressed={section === item.id}
-        onClick={() => { if (section !== item.id) setSection(item.id) }}>{item.label}</button>
+    <nav className="plan-flow" aria-label="月の予算を決める順番">{sections.map((item, index) =>
+      <button key={item.id} aria-label={item.label} aria-pressed={section === item.id}
+        onClick={() => setSection(item.id)}><small>{index + 1} {item.label}</small><Amount value={stepAmounts[item.id]} /></button>
     )}</nav>
-    <div hidden={section !== 'income'}><Panel title="給与・臨時収入" description="入金予定を登録し、金額が確定したら「編集」で実際の金額を入れます。">
+    <div hidden={section !== 'income'}><Panel title="今月の給与・予備費" description="パパとママの給与見込みと、今月の生活費に回す予備費を入れます。">
       <div className="stats"><Stat label="今月の収入（見込みを含む）" value={totals.income} /><Stat label="確定した収入" value={incomes.reduce((total, item) => total + (item.actual ?? 0), 0)} /></div>
       {incomes.length > 0 ? <>
         <p className="hint">左にスワイプ、または「…」で削除できます。</p>
         <ul className="rows">{incomes.map(item => <SwipeRow key={item.id} label={item.label} onRemove={() => removeIncome(item)}>
-          <span><b>{item.label}{item.userId && `（${data.users.find(user => user.id === item.userId)?.name ?? '共通'}）`}</b><small>{item.date.slice(5).replace('-', '/')} ・ {item.route === 'deposit' ? data.accounts.find(a => a.id === item.accountId)?.name : '口座残高への反映なし'} ・ {item.actual === null ? '見込み' : '確定'}</small></span>
+          <span><b>{item.label}{item.userId && `（${data.users.find(user => user.id === item.userId)?.name ?? '共通'}）`}</b><small>{item.route === 'reserve' ? '今月の予算に充当' : `${item.date.slice(5).replace('-', '/')} ・ ${item.route === 'deposit' ? data.accounts.find(a => a.id === item.accountId)?.name : '口座残高への反映なし'} ・ ${item.actual === null ? '見込み' : '確定'}`}</small></span>
           <Amount value={item.actual ?? item.forecast} /><button className="quiet" onClick={() => openIncome(item.id)}>編集</button>
         </SwipeRow>)}</ul>
       </> : <p className="empty">この月の収入はまだありません。</p>}
       <div className="actions">
-        {!editingIncome && <button className="primary" onClick={() => openIncome('new')}>＋ 収入を追加</button>}
+        {!editingIncome && <>
+          <button className="primary" onClick={() => openIncome('salary-a')}>＋ パパの給与</button>
+          <button className="primary" onClick={() => openIncome('salary-b')}>＋ ママの給与</button>
+          <button className="quiet" onClick={() => openIncome('reserve')}>＋ 予備費</button>
+          <button className="quiet" onClick={() => openIncome('new')}>＋ その他の収入</button>
+        </>}
         {!editingIncome && incomes.length === 0 && previousIncome.length > 0 && <button className="quiet" onClick={() => save(old => {
           if (old.incomes.some(item => item.date.startsWith(month))) return old
           return { ...old, incomes: [...old.incomes, ...previousIncome.map(i => ({ ...i, id: uid(), date: onDay(month, Number(i.date.slice(8))), forecast: i.actual ?? i.forecast, actual: null }))] }
@@ -61,8 +72,8 @@ export function Planning({ data, month, save, section, setSection }: {
       {editingIncome && <form id="income-form" key={editingIncome} onSubmit={form(fields => {
         const record: Income = {
           id: income?.id ?? uid(), label: str(fields, 'label'), userId: str(fields, 'user') || undefined,
-          date: onDay(month, num(fields, 'day')), forecast: num(fields, 'forecast'), actual: str(fields, 'actual') === '' ? null : num(fields, 'actual'),
-          route: 'deposit', accountId: str(fields, 'account'),
+          date: onDay(month, reserve ? 1 : num(fields, 'day')), forecast: num(fields, 'forecast'), actual: str(fields, 'actual') === '' ? null : num(fields, 'actual'),
+          route: reserve ? 'reserve' : 'deposit', accountId: reserve ? 'main' : str(fields, 'account'),
         }
         const duplicate = incomes.some(item => item.id !== record.id && item.userId === record.userId && item.date === record.date &&
           item.accountId === record.accountId && item.label.normalize('NFKC') === record.label.normalize('NFKC') &&
@@ -71,23 +82,29 @@ export function Planning({ data, month, save, section, setSection }: {
         if (save(old => ({ ...old, incomes: [...old.incomes.filter(i => i.id !== record.id), record] }))) setEditingIncome(null)
       })}>
         <div className="fields">
-          <Field label="項目"><input name="label" defaultValue={income?.label ?? '給与'} required maxLength={100} /></Field>
-          <Field label="誰の収入"><select name="user" defaultValue={income?.userId ?? ''}><option value="">共通</option>{data.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
+          <Field label="項目"><input name="label" defaultValue={income?.label ?? (reserve ? '予備費' : parent ? '給与' : '')} required maxLength={100} /></Field>
+          {reserve ? <Field label="今月使う金額（円）"><Money name="forecast" value={income?.forecast} /></Field> : <>
+          <Field label="誰の収入"><select name="user" defaultValue={income?.userId ?? parent?.id ?? ''}><option value="">共通</option>{data.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
           <Field label="入金日（日）"><input type="number" name="day" min="1" max="31" defaultValue={income ? Number(income.date.slice(8)) : 25} required /></Field>
           <Field label="見込み（円）"><Money name="forecast" value={income?.forecast} /></Field>
           <Field label="確定額（空欄は未確定）"><Money name="actual" value={income?.actual} required={false} /></Field>
           <Field label="入金先"><select name="account" defaultValue={income?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+          </>}
         </div>
-        {income && income.route !== 'deposit' && <p className="notice">この収入は口座残高に反映されていません。保存すると選んだ口座への入金として扱います。</p>}
+        {income && !reserve && income.route !== 'deposit' && <p className="notice">保存すると選んだ口座への入金として扱います。</p>}
         <div className="actions"><button className="primary">{income ? '収入を更新' : '収入を保存'}</button><button type="button" className="quiet" onClick={() => setEditingIncome(null)}>取消</button></div>
       </form>}
+      {!editingIncome && incomes.length > 0 && <button className="quiet" onClick={() => setSection('fixed')}>次へ：固定費を確認</button>}
     </Panel></div>
     <div className="stack" hidden={section !== 'budget'}>
-    <div className="stats"><Stat label="まだ配分できる額" value={totals.unallocated} /><Stat label="貯蓄見込み" value={totals.savingsForecast} /></div>
-    <Panel title="生活費の配分" description="予算の配分は支出になりません。お菓子・お酒・外食の予算は他のカテゴリーから移せます。">
-      <form key={month + JSON.stringify(currentBudget)} onSubmit={form(fields => {
+    <div className="stats"><Stat label="変動費に使える額" value={available} /><Stat label={unassigned < 0 ? '配分オーバー' : 'あと配分できる額'} value={Math.abs(unassigned)} /></div>
+    <Panel title="変動費を配分する" description="給与・予備費から固定費を引いた残りを、食費・お菓子代・光熱費などに分けます。">
+      <form key={month + JSON.stringify(currentBudget)} onInput={event => {
+        const fields = new FormData(event.currentTarget)
+        setAllocatedDraft(data.categories.reduce((total, category) => total + num(fields, category.id), num(fields, 'savings')))
+      }} onSubmit={form(fields => {
         const amounts = Object.fromEntries(data.categories.map(c => [c.id, num(fields, c.id)]))
-        save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { month, amounts, plannedSavings: num(fields, 'savings') }] }))
+        if (save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { month, amounts, plannedSavings: num(fields, 'savings') }] }))) setAllocatedDraft(null)
       })}>
         <div className="fields">
           {data.categories.map(c => <Field key={c.id} label={c.name}><Money name={c.id} value={totals.budget.amounts[c.id] ?? 0} /></Field>)}
@@ -96,7 +113,7 @@ export function Planning({ data, month, save, section, setSection }: {
         <div className="actions"><button className="primary">予算を保存</button><button type="button" className="quiet" disabled={!budgets.some(b => b.month === previous)} onClick={() => {
           if (!window.confirm('この月の配分を前月の配分で置き換えますか？')) return
           const plan = budgetFor(data, previous)
-          save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { ...plan, month }] }))
+          if (save(old => ({ ...old, budgets: [...old.budgets.filter(b => b.month !== month), { ...plan, month }] }))) setAllocatedDraft(null)
         }}>前月予算をコピー</button></div>
       </form>
       {data.categories.map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}
@@ -111,7 +128,8 @@ export function Planning({ data, month, save, section, setSection }: {
     <div hidden={section !== 'fixed'}><Panel title="固定費" description="登録した期間だけ毎月の予算に反映します。支払いが終わったら「編集」で終了月を入力します。">
       <div className="stats"><Stat label="今月の固定費" value={totals.fixed} detail={totals.asset ? `うち積立 ${yen(totals.asset)}` : undefined} /></div>
       <ul className="rows">{data.fixed.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.kind === 'asset' ? '積立 ・ ' : ''}{item.dueDay ? `${item.dueDay}日` : '引落日なし'}{item.endMonth ? ` ・ ${item.endMonth}まで` : ''}</small></span><Amount value={item.amount} /><button className="quiet" onClick={() => openFixed(item.id)}>編集</button></li>)}</ul>
-      {!editingFixed && <button className="primary" onClick={() => openFixed('new')}>＋ 固定費を追加</button>}
+      {!editingFixed && <div className="actions"><button className="quiet" onClick={() => openFixed('new')}>＋ 固定費を追加</button>
+        <button className="primary" onClick={() => setSection('budget')}>次へ：変動費を配分</button></div>}
       {editingFixed && <form id="fixed-form" key={editingFixed} onSubmit={form(fields => {
         const record: FixedExpense = {
           id: fixed?.id ?? uid(), name: str(fields, 'name'), amount: num(fields, 'amount'), accountId: str(fields, 'account'),

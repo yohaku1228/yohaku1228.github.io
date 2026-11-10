@@ -58,3 +58,13 @@ export async function readReceipt(image: Blob, signal: AbortSignal) {
   }
   return response.json() as Promise<unknown>
 }
+
+export async function getFoodAdvice(totals: { budget: number; spent: number; weekRemaining: number; daysLeft: number; dayGuide: number }, signal: AbortSignal) {
+  const response = await request('food-advice', {
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(totals),
+  })
+  if (!response.ok) throw new Error(await message(response, 'AIの助言を取得できませんでした。'))
+  const body = await response.json()
+  if (typeof body.text !== 'string' || !body.text.trim()) throw new Error('AIの助言を取得できませんでした。')
+  return body.text as string
+}
