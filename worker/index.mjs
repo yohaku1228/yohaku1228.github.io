@@ -85,7 +85,7 @@ async function foodAdvice(request, env) {
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: `5人家族向けに、今日から実行しやすい食費の工夫を日本語で2～3文、180字以内で提案してください。残日数が少ない、使いすぎ、予算内などの状況に応じてください。食事の量や必要な栄養は削らず、金額を新しく計算したり価格を推測したりしないでください。金額を挙げる場合は下記の数値だけ使ってください。Markdown不要。月間予算 ${budget}円、支出 ${spent}円、今週の残り ${weekRemaining}円、月末まで今日を含め ${daysLeft}日、今日の買い物の目安 ${dayGuide}円。` }] }],
+      contents: [{ parts: [{ text: `5人家族向けに、今日から実行しやすい食費の工夫を日本語で2～3文、180字以内で提案してください。残日数が少ない、使いすぎ、予算内などの状況に応じてください。食事の量や必要な栄養は削らず、金額を新しく計算したり価格を推測したりしないでください。金額を挙げる場合は下記の数値だけ使ってください。Markdown不要。月間予算 ${budget}円、支出 ${spent}円、今週これから使う目安 ${weekRemaining}円、月末まで今日を含め ${daysLeft}日、1日あたりの食費の目安 ${dayGuide}円。` }] }],
       generationConfig: { maxOutputTokens: 640 },
     }),
   })

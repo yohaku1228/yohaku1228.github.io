@@ -87,6 +87,22 @@ test('月をまたぐ週を月ごとに分けて、月間食費と一致する',
   assert.equal(weeks.reduce((total, week) => total + week.allocated, 0), 10_000)
 })
 
+test('食費の目安は月の残りを今日からの日数で割り、まとめ買いを二重に差し引かない', () => {
+  const ledger = starter()
+  ledger.defaultBudget = { food: 60000 }
+  ledger.transactions.push({ ...purchase, date: '2026-11-10', items: [{ ...purchase.items[0], amount: 13565, discount: 0 }] })
+  const week = foodWeek(ledger, '2026-11', '2026-11-11')
+  assert.equal(week.remaining, 435)
+  assert.equal(week.daysLeft, 20)
+  assert.equal(week.daysThisWeek, 5)
+  assert.equal(week.daily, 2321)
+  assert.equal(week.availableThisWeek, 11608)
+  assert.equal(foodWeek(ledger, '2026-11', '2026-11-30').daily, 46435)
+  ledger.defaultBudget.food = 10000
+  assert.equal(foodWeek(ledger, '2026-11', '2026-11-11').daily, 0)
+  assert.equal(foodWeek(ledger, '2026-11', '2026-11-11').availableThisWeek, 0)
+})
+
 test('外税は商品を増やさず、カテゴリー予算とカード請求の合計に含める', () => {
   const ledger = starter()
   const receipt: Transaction = {

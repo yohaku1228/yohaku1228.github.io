@@ -245,5 +245,12 @@ export function foodWeek(data: Ledger, month: Month, selected: Day) {
     .flatMap(t => transactionItemAmounts(t).filter((_, index) => t.items[index].categoryId === 'food')))
   const monthlyRemaining = total - (categorySpending(data, month).food ?? 0)
   const remaining = allocated - spent
-  return { startDate, endDate, allocated, spent, remaining, daily: Math.floor(Math.max(0, Math.min(remaining, monthlyRemaining)) / (end - day + 1)) }
+  const daysLeft = days - day + 1
+  const daysThisWeek = end - day + 1
+  const usable = Math.max(0, monthlyRemaining)
+  return {
+    startDate, endDate, allocated, spent, remaining, daysLeft, daysThisWeek,
+    daily: Math.floor(usable / daysLeft),
+    availableThisWeek: Math.floor(usable * daysThisWeek / daysLeft),
+  }
 }

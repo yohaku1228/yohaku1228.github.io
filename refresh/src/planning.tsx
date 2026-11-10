@@ -131,7 +131,7 @@ export function Planning({ data, month, save, section, openBudget }: {
     </Panel>
     <Panel title="今週の食費" description={week.startDate + ' 〜 ' + week.endDate}>
       <div className="stats"><Stat label="週間予算" value={week.allocated} /><Stat label="使用額" value={week.spent} /><Stat label="週間残り" value={week.remaining} /><Stat label="1日あたり" value={week.daily} /></div>
-      <p className="hint">週間予算は月間食費の内訳です。1日あたりの目安は、月間の残額を上限に計算します。</p>
+      <p className="hint">週間予算は月間食費の内訳です。1日あたりの目安は、月の残り予算を残り日数で割って計算します。</p>
     </Panel>
     </div>}
     {section !== 'income' && <div hidden={section !== 'fixed'}><Panel title="固定費" description="登録した期間だけ毎月の予算に反映します。支払いが終わったら「編集」で終了月を入力します。">

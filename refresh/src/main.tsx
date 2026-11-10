@@ -38,13 +38,13 @@ function Home({ data, month, go, openPayments }: {
   const week = foodWeek(data, month, date)
   const days = daysInMonth(month)
   const elapsed = current ? Number(date.slice(8)) : 0
-  const daysLeft = days - elapsed + 1
+  const daysLeft = week.daysLeft
   const foodBudget = totals.budget.amounts.food ?? 0
   const foodSpent = totals.categorySpend.food ?? 0
   const foodName = data.categories.find(category => category.id === 'food')?.name ?? '食費'
   const snacksName = data.categories.find(category => category.id === 'snacks')?.name ?? 'お菓子・ジュース'
-  const weekRemaining = Math.min(week.remaining, foodBudget - foodSpent)
-  const dayGuide = Math.min(week.daily, Math.floor(Math.max(0, foodBudget - foodSpent) / daysLeft))
+  const weekRemaining = week.availableThisWeek
+  const dayGuide = week.daily
   const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining, daysLeft, dayGuide }
   const requestKey = JSON.stringify(snapshot)
   const [advice, setAdvice] = useState<{ key: string; text: string; error?: boolean } | null>(null)
@@ -71,7 +71,7 @@ function Home({ data, month, go, openPayments }: {
     {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
     {current && foodBudget > 0 && <Panel title="食費のアドバイス">
-      <div className="stats"><Stat label="今日の買い物の目安" value={dayGuide} detail={`月末まで今日を含めて${daysLeft}日`} /><Stat label="今週使える食費" value={weekRemaining} detail="月の残りを上限に表示" /></div>
+      <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
       {cloudEnabled && <>
         <button className="quiet" disabled={busy || (advice?.key === requestKey && !advice.error)} onClick={async () => {
           setBusy(true)
