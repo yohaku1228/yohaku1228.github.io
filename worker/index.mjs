@@ -1,3 +1,5 @@
+import { dinnerContext } from './meal-context.mjs'
+
 const cookieName = '__Host-kakei-session'
 const sessionSeconds = 14 * 24 * 60 * 60
 const encoder = new TextEncoder()
@@ -68,10 +70,10 @@ const defaultModel = '@cf/google/gemma-4-26b-a4b-it'
 
 async function foodAdvice(request, env) {
   if (!env.AI?.run) return json(503, { error: 'AIの設定が完了していません。' })
-  const body = await readJson(request, 24_000)
+  const body = await readJson(request, 128_000)
   const { budget, spent, weekRemaining, daysLeft, dayGuide } = body ?? {}
   if (![budget, spent, weekRemaining, daysLeft, dayGuide].every(value => Number.isSafeInteger(value) && Math.abs(value) <= 1_000_000_000) ||
-      budget < 1 || spent < 0 || weekRemaining < 0 || daysLeft < 1 || daysLeft > 31 || dayGuide < 0) {
+      budget < 0 || spent < 0 || weekRemaining < 0 || daysLeft < 1 || daysLeft > 31 || dayGuide < 0) {
     return json(400, { error: '今月の食費予算を確認してください。' })
   }
   const history = body.messages ?? [{ role: 'user', content: '今月の食費を見て、今日からできる工夫を教えてください。' }]
@@ -81,6 +83,8 @@ async function foodAdvice(request, env) {
       history.reduce((size, item) => size + item.content.length, 0) > 10_000) {
     return json(400, { error: '質問は1000文字以内で入力してください。会話が長い場合は新しい相談を始めてください。' })
   }
+  const meals = dinnerContext(body.meals)
+  if (meals === null) return json(400, { error: '晩ごはんの記録を確認してください。' })
   const remaining = budget - spent
   const context = history.map(({ role, content }) => ({ role, content: content.trim() }))
   while (context.length > 1 && context.reduce((size, item) => size + item.content.length, 0) > 10_000) context.splice(0, 2)
@@ -108,9 +112,10 @@ async function foodAdvice(request, env) {
     '量が不明な手持ち食材は足りると断定せず、必要量から不足分だけ買うよう伝えてください。予算が厳しい場合は買う優先順位と安価な代用品を示し、無理にすべて買うよう勧めません。' +
     '通常は短く、献立や作り方には必要な説明を省略せず、600字程度までを目安に改行で読みやすくしてください。Markdown不要。集計値の一覧を毎回末尾に転載しないでください。' +
     '以下の最新集計を正として使い、過去の回答と違う場合は最新集計を優先してください。支出は変更せず、提案にとどめてください。Markdownは使わないでください。' +
-    '月間食費予算 ' + budget + '円、使用済み ' + spent + '円、残り予算 ' + remaining + '円、今週これからの目安 ' + weekRemaining +
+    (budget ? '月間食費予算 ' + budget + '円' : '月間食費予算は未設定') + '、使用済み ' + spent + '円、残り予算 ' + remaining + '円、今週これからの目安 ' + weekRemaining +
     '円、月末まで今日を含め ' + daysLeft + '日、1日あたりの目安 ' + dayGuide + '円。残りが負なら予算超過です。' +
-    'この集計は判断用の背景情報であり、回答に一覧を転載しないでください。最後まで質問への具体的な答えだけを書いてください。' },
+    '予算未設定の場合は予算不足と断定せず、金額を保証しないで献立相談に答えてください。' +
+    'この集計は判断用の背景情報であり、回答に一覧を転載しないでください。最後まで質問への具体的な答えだけを書いてください。' + meals },
     ...context]
   try {
     const result = await env.AI.run(env.AI_MODEL || defaultModel, { messages, max_completion_tokens: 1024, temperature: 0.4, chat_template_kwargs: { enable_thinking: false } })

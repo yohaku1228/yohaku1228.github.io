@@ -73,6 +73,8 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
   milestones: records(milestone),
   advice: records(z.object({ id, month, text: z.string(), createdAt: z.string() })),
   recipes: records(z.object({ id, servings: z.int().positive(), name: label, estimatedCost: amount, ingredients: z.array(z.string()), steps: z.array(z.string()) })),
+  favoriteMeals: records(z.object({ id, name: label.max(80), notes: z.string().max(200) })).max(40).optional(),
+  mealHistory: records(z.object({ id, mealId: id, name: label.max(80), date: day, note: z.string().max(300).optional() })).max(3000).optional(),
 }).refine(data => {
   const accounts = new Set(data.accounts.map(a => a.id))
   const categories = new Set(data.categories.map(c => c.id))

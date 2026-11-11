@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { getFoodAdvice, type ChatMessage, type FoodSnapshot } from './cloud'
 import { Field } from './ui'
+import type { MealContext } from './meals'
 
-export function FoodChat({ snapshot }: { snapshot: FoodSnapshot }) {
+export function FoodChat({ snapshot, meals, dinnerMode = false }: { snapshot: FoodSnapshot; meals?: MealContext; dinnerMode?: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
@@ -24,7 +25,7 @@ export function FoodChat({ snapshot }: { snapshot: FoodSnapshot }) {
     const context = pending.slice(-11)
     while (context.length > 1 && context.reduce((n, item) => n + item.content.length, 0) > 10_000) context.splice(0, 2)
     try {
-      const answer = await getFoodAdvice(snapshot, controller.signal, context)
+      const answer = await getFoodAdvice(snapshot, controller.signal, context, meals)
       if (!controller.signal.aborted) {
         setMessages([...pending, { role: 'assistant', content: answer }])
         setDraft('')
@@ -39,7 +40,7 @@ export function FoodChat({ snapshot }: { snapshot: FoodSnapshot }) {
   }
 
   return <div className="food-chat">
-    {messages.length === 0 && <button className="quiet" disabled={busy} onClick={() => void send('今月の食費を見て、今日からできる工夫を教えてください。')}>AIに食費のコツを聞く</button>}
+    {messages.length === 0 && <button className="quiet" disabled={busy} onClick={() => void send(dinnerMode ? 'わが家の定番と晩ごはんの記録から、しばらく作っていない料理を1つ選んでおすすめして。記録がない料理はそう説明して。5人分の材料と、なければ買い足すリストも教えて。' : '今月の食費を見て、今日からできる工夫を教えてください。')}>{dinnerMode ? '献立と買い物リストを相談' : 'AIに食費のコツを聞く'}</button>}
     {messages.length > 0 && <>
       <div className="chat-history" role="log" aria-label="食費の相談" aria-live="polite">
         {messages.map((item, index) => <div key={index} className={'chat-message chat-' + item.role}><small>{item.role === 'user' ? 'あなた' : 'AI'}</small><p>{item.content}</p></div>)}
@@ -48,11 +49,11 @@ export function FoodChat({ snapshot }: { snapshot: FoodSnapshot }) {
       <button className="quiet chat-reset" disabled={busy} onClick={() => { setMessages([]); setError(''); setDraft('') }}>新しい相談</button>
     </>}
     <form onSubmit={event => { event.preventDefault(); void send(draft) }}>
-      <Field label={messages.length ? '続けて質問する' : '食費について質問する'}><textarea value={draft} onChange={event => setDraft(event.target.value)} rows={3} maxLength={1000} disabled={busy} placeholder="例：まとめ買いで無駄を減らすには？" required /></Field>
+      <Field label={messages.length ? '続けて質問する' : dinnerMode ? '献立・買い物について質問する' : '食費について質問する'}><textarea value={draft} onChange={event => setDraft(event.target.value)} rows={3} maxLength={1000} disabled={busy} placeholder={dinnerMode ? '例：今日はぎょうざにしたい。キャベツと卵はあるけど、何を買う？' : '例：まとめ買いで無駄を減らすには？'} required /></Field>
       <button className="primary" disabled={busy || !draft.trim()} type="submit">{busy ? '回答を作成中…' : '送信'}</button>
     </form>
     {busy && <p className="hint" role="status">AIが回答を作成しています。</p>}
     {error && <p className="notice" role="alert">{error}</p>}
-    <p className="hint">送信すると食費の集計額・残り日数・直近の会話をCloudflare Workers AIに送ります。会話はこの画面を開いている間だけ保持します。</p>
+    <p className="hint">送信すると食費の集計・定番料理・直近30件の晩ごはん・会話をCloudflare Workers AIに送ります。会話は画面を離れると消え、晩ごはんの記録は家計と一緒に保存されます。</p>
   </div>
 }

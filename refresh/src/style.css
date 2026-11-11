@@ -114,6 +114,15 @@ input[type=checkbox] { appearance: auto; accent-color: var(--blue); width: 18px;
 .chat-user { justify-self: end; background: #dfeeff; }
 .chat-assistant { justify-self: start; }
 .chat-reset { font-size: 12px; }
+.dinner-calendar { margin-top: 12px; }
+.dinner-day { min-height: 72px; gap: 4px; padding-top: 6px; }
+.dinner-day small { width: 100%; font-size: 10px; white-space: nowrap; }
+.dinner-day:disabled { opacity: .35; }
+.meal-record { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.meal-record small { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.meal-candidates { display: grid; gap: 8px; padding: 0; margin: 12px 0; list-style: none; }
+.meal-candidates li { padding: 10px 12px; border-radius: 12px; background: #f0f6ff; }
+.meal-candidates small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 #income-form, #fixed-form, #sub-actual-form, #transfer-form { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .bill details { flex: 0 0 100%; margin: 0; }
 .bill details form { max-width: 420px; }

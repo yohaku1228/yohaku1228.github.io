@@ -1,4 +1,5 @@
 import type { Ledger } from './model'
+import type { MealContext } from './meals'
 
 export const cloudEnabled = import.meta.env.VITE_CLOUDFLARE === '1'
 
@@ -49,9 +50,9 @@ export async function pushLedger(revision: number, ledger: Ledger): Promise<numb
 export type FoodSnapshot = { budget: number; spent: number; weekRemaining: number; daysLeft: number; dayGuide: number }
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
-export async function getFoodAdvice(totals: FoodSnapshot, signal: AbortSignal, messages?: ChatMessage[]) {
+export async function getFoodAdvice(totals: FoodSnapshot, signal: AbortSignal, messages?: ChatMessage[], meals?: MealContext) {
   const response = await request('food-advice', {
-    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...totals, messages }),
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...totals, messages, meals }),
   })
   if (!response.ok) throw new Error(await message(response, 'AIの助言を取得できませんでした。'))
   const body = await response.json()

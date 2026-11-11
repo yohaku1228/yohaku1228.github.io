@@ -5,6 +5,8 @@ import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
 import { FoodChat } from './food-chat'
+import { DinnerCalendar } from './dinner'
+import { mealContext } from './meals'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
 import { Calendar, Records } from './records'
@@ -21,13 +23,13 @@ const tabs = [
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
-type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'accounts' | 'analysis' | 'settings'
+type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  calendar: 'カレンダー', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
+  calendar: 'カレンダー', dinner: '晩ごはん', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
 function Home({ data, month, go, openPayments }: {
@@ -70,8 +72,9 @@ function Home({ data, month, go, openPayments }: {
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
     {current && foodBudget > 0 && <Panel title="食費のアドバイス">
       <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
-      {cloudEnabled && <FoodChat key={month} snapshot={snapshot} />}
+      {cloudEnabled && <FoodChat key={month} snapshot={snapshot} meals={mealContext(data, date)} />}
     </Panel>}
+    <button className="quiet bank-entry" onClick={() => go('dinner')}><CalendarDays size={18} /> 晩ごはんの記録・献立相談 <ArrowRight size={16} /></button>
     <Panel title="今月の変動費">
       <div className="stats"><Stat label="収入から固定費を引いた額" value={hasIncome ? totals.income - totals.fixed : null} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
       <button className="quiet" onClick={() => go(hasIncome ? 'budget' : 'planning')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
@@ -126,6 +129,7 @@ function App() {
       </div>}
       {(view === 'records' || view === 'add') && <Records key={view} mode={view === 'add' ? 'add' : 'history'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
+      {view === 'dinner' && <DinnerCalendar key={month} data={data} month={month} save={save} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
@@ -136,6 +140,9 @@ function App() {
             { icon: ArrowLeftRight, label: accountTitles.payments, detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
             { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
+          ] },
+          { title: '献立', items: [
+            { icon: CalendarDays, label: '晩ごはん', detail: '献立カレンダー・定番・買い物リスト', open: () => go('dinner') },
           ] },
           { title: 'その他', items: [
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },

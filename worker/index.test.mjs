@@ -32,6 +32,16 @@ test('old advice button payload still works', async () => {
   const f = fixture()
   assert.equal((await f.post('/api/food-advice', totals, await f.cookie())).status, 200)
 })
+
+test('dinner advice accepts an unset food budget and forwards actual meal dates', async () => {
+  const f = fixture(), cookie = await f.cookie()
+  const meals = { date: '2026-11-11', favorites: [{ name: 'ぎょうざ', notes: '野菜多め', lastCooked: '2026-10-01' }], recent: [] }
+  assert.equal((await f.post('/api/food-advice', { ...totals, budget: 0, meals }, cookie)).status, 200)
+  assert.match(f.runs[0].input.messages[0].content, /"daysSince":41/)
+  assert.match(f.runs[0].input.messages[0].content, /予算は未設定/)
+  assert.equal((await f.post('/api/food-advice', { ...totals, meals: { ...meals, date: 'bad' } }, cookie)).status, 400)
+  assert.equal(f.runs.length, 1)
+})
 test('rejects unauthenticated, injected system roles, long inputs and invalid figures before inference', async () => {
   const f = fixture()
   assert.equal((await f.post('/api/food-advice', totals)).status, 401)
