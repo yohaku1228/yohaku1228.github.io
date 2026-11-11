@@ -6,6 +6,14 @@ import { monthly } from './finance.ts'
 import type { Transaction } from './model.ts'
 
 const buy=(id:string,date:string,paymentId:string,amount:number,extra:Partial<Transaction>={}):Transaction=>({id,date,paymentId,merchant:id,memo:'',personal:false,items:[{id:'item-'+id,name:'買い物',categoryId:'food',quantity:1,amount,discount:0}],...extra})
+test('unused placeholder account is hidden; real banks and linked nonzero amounts stay visible',()=>{
+ const d=starter()
+ assert.equal(monthlyAllocation(d,'2026-11').groups.some(g=>g.name==='メイン口座'),false)
+ d.transactions=[buy('card','2026-11-11','card',1000)]
+ assert.equal(monthlyAllocation(d,'2026-11').groups.find(g=>g.id==='main')?.amount,1000)
+ d.transactions=[];d.accounts[0].name='東北労働金庫'
+ assert.equal(monthlyAllocation(d,'2026-11').groups.some(g=>g.name==='東北労働金庫'),true)
+})
 test('bank distribution uses purchase month even after closing day; cash is separate and refunds net correctly',()=>{
  const d=starter();d.accounts[0].name='東北労働金庫';d.payments[2].closingDay=15
  d.transactions=[buy('nov','2026-11-30','card',10000),buy('refund','2026-11-30','card',-1000),buy('old','2026-10-31','card',3000),buy('later','2026-12-01','card',9000),buy('cash','2026-11-10','cash',2000),buy('cash-refund','2026-11-11','cash',-500)]

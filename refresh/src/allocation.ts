@@ -31,6 +31,7 @@ export function monthlyAllocation(data: Ledger, month: string) {
   }
   const groups = [...data.accounts.filter(row => row.id !== 'cash' && row.name !== '現金' && (row.kind !== 'annual' || rows.some(item => item.accountId === row.id))).map(row => ({ id: row.id, name: row.name })), { id: 'cash', name: '現金' }]
     .map(group => ({ ...group, rows: rows.filter(row => row.accountId === group.id), amount: sum(rows.filter(row => row.accountId === group.id).map(row => row.amount)) }))
+    .filter(group => !(group.id === 'main' && group.name === 'メイン口座' && group.rows.every(row => row.amount === 0)))
   const income = monthly(data, month).income
   const expense = sum(rows.map(row => row.amount))
   return { income, expense, balance: income - expense, rows, groups }
