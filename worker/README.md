@@ -20,3 +20,4 @@ HOMEWARDと同じCloudflareアカウントで、家計専用のWorkerとD1を使
 - 本番画面とAPIは同じWorkerで配信します。GitHubはソース管理に使います。
 - 検証: `node --test worker/index.test.mjs` と `pnpm --dir refresh build`。
 - モデル情報: https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/
+- 献立は親2人・食べ盛りの子ども3人を前提に、主食・十分な主菜・野菜をそろえ、主要な材料量と作り方を提案します。手持ち食材を生かし、不足する食材は量・目的・購入優先度・代用品を示します。予算不足を食事量の削減だけで解決せず、食費への再配分も相談します。価格・在庫は推測して断定しません。生成結果の分量や価格が保証されるものではありません。

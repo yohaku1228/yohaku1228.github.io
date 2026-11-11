@@ -26,7 +26,7 @@ test('authenticated advice uses Workers AI and carries conversation plus latest 
   assert.equal(f.runs[0].model, f.env.AI_MODEL)
   assert.deepEqual(f.runs[0].input.messages.slice(1), messages)
   assert.match(f.runs[0].input.messages[0].content, /残り予算 46435円/)
-  assert.equal(f.runs[0].input.max_completion_tokens, 512)
+  assert.equal(f.runs[0].input.max_completion_tokens, 1024)
 })
 test('old advice button payload still works', async () => {
   const f = fixture()
