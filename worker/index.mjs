@@ -64,12 +64,6 @@ async function writeLedger(request, env) {
   return row ? json(200, { revision: row.revision }) : json(409, { error: '別の端末で更新されました。' })
 }
 
-async function takeAIQuota(env) {
-  return !!await env.DB.prepare(`insert into receipt_quota(day, calls) values (?, 1)
-    on conflict(day) do update set calls = calls + 1 where calls < 15 returning calls`)
-    .bind(new Date().toISOString().slice(0, 10)).first()
-}
-
 const defaultModel = '@cf/google/gemma-4-26b-a4b-it'
 
 async function foodAdvice(request, env) {
@@ -87,7 +81,6 @@ async function foodAdvice(request, env) {
       history.reduce((size, item) => size + item.content.length, 0) > 10_000) {
     return json(400, { error: '質問は1000文字以内で入力してください。会話が長い場合は新しい相談を始めてください。' })
   }
-  if (!await takeAIQuota(env)) return json(429, { error: '今日のAI利用上限（15回）に達しました。明日またお試しください。' })
   const remaining = budget - spent
   const context = history.map(({ role, content }) => ({ role, content: content.trim() }))
   while (context.length > 1 && context.reduce((size, item) => size + item.content.length, 0) > 10_000) context.splice(0, 2)

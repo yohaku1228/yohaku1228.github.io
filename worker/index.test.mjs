@@ -5,12 +5,11 @@ import worker from './index.mjs'
 const totals = { budget: 60000, spent: 13565, weekRemaining: 11608, daysLeft: 20, dayGuide: 2321 }
 const origin = 'https://household.test'
 function fixture() {
-  let calls = 0
   const runs = []
   const env = {
     APP_PASSWORD: 'test-password-at-least-24-characters', SESSION_SECRET: 'test-session-secret-at-least-32-characters',
     LOGIN_LIMIT: { limit: async () => ({ success: true }) },
-    DB: { prepare: () => ({ bind: () => ({ first: async () => calls >= 15 ? null : { calls: ++calls } }) }) },
+    DB: { prepare: () => { throw new Error('Advice must not use the retired quota table') } },
     AI: { run: async (model, input) => { runs.push({ model, input }); return { choices: [{ message: { content: '食材を使い切る献立を先に決めましょう。' }, finish_reason: 'stop' }] } } },
     AI_MODEL: '@cf/test/model',
   }
@@ -45,11 +44,10 @@ test('rejects unauthenticated, injected system roles, long inputs and invalid fi
   ]) assert.equal((await f.post('/api/food-advice', body, cookie)).status, 400)
   assert.equal(f.runs.length, 0)
 })
-test('daily limit blocks the sixteenth inference', async () => {
+test('more than fifteen requests work without an application daily quota', async () => {
   const f = fixture(), cookie = await f.cookie()
-  for (let i = 0; i < 15; i++) assert.equal((await f.post('/api/food-advice', totals, cookie)).status, 200)
-  assert.equal((await f.post('/api/food-advice', totals, cookie)).status, 429)
-  assert.equal(f.runs.length, 15)
+  for (let i = 0; i < 20; i++) assert.equal((await f.post('/api/food-advice', totals, cookie)).status, 200)
+  assert.equal(f.runs.length, 20)
 })
 test('handles missing binding, quota, outage and empty responses', async () => {
   const f = fixture(), cookie = await f.cookie()

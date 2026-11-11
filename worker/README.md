@@ -14,7 +14,7 @@ HOMEWARDと同じCloudflareアカウントで、家計専用のWorkerとD1を使
 
 - このリポジトリはwrangler.jsoncを使用します。TOMLの場合は `[ai]` の下に `binding = "AI"` を指定します。重複する設定ファイルは作りません。
 - Workers Freeで運用します。1日10,000 Neuronsの無料枠を超えるとAIの呼び出しは失敗します。Paidへ変更すると超過分は課金対象です。https://developers.cloudflare.com/workers-ai/platform/pricing/
-- 既存のD1テーブルreceipt_quotaを再利用し、家族全体で1日15回までに制限します。追加質問・推論エラーも1回に含みます。日付はUTC（日本時間9時切替）。アカウント全体の無料枠とは別の制限です。
+- アプリ独自の1日あたりの回数制限は設けません。Cloudflareアカウント全体の無料枠が利用上限です。旧receipt_quotaテーブルは参照しません。
 - 当月の食費予算がある場合、ホームにチャットを表示します。食費の集計額・残り日数・直近5往復と質問（合計10,000文字以内）を送ります。質問は1,000文字以内。会話は画面を離れると消え、家計には保存しません。通信エラー時は入力を保持します。
 - POST /api/food-adviceは従来の集計のみの送信にも対応します。messages（user/assistant交互、最後はuser）付きで追加質問に回答します。ログイン・同一Originの検証は維持します。
 - 本番画面とAPIは同じWorkerで配信します。GitHubはソース管理に使います。
