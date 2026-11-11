@@ -17,12 +17,11 @@ import './style.css'
 
 const tabs = [
   { id: 'home', name: 'ホーム', icon: House },
-  { id: 'planning', name: '予算', icon: Wallet },
   { id: 'add', name: '支出を追加', icon: Plus },
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
-type View = typeof tabs[number]['id'] | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings'
+type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
@@ -31,8 +30,8 @@ const titles: Record<View, string> = {
   calendar: 'カレンダー', dinner: '晩ごはん', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
-function Home({ data, month, go, save }: {
-  data: Ledger; month: string; go: (view: View) => void; save: Save
+function Home({ data, month, go, save, editorSection, closeEditor }: {
+  data: Ledger; month: string; go: (view: View) => void; save: Save; editorSection: 'planning' | 'fixed' | 'budget' | null; closeEditor: () => void
 }) {
   const totals = monthly(data, month)
   const date = today()
@@ -68,6 +67,12 @@ function Home({ data, month, go, save }: {
     </section>
     {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
+    <details className="panel home-edit-access"><summary>収入・固定費・変動費予算を編集</summary><div className="home-editor-buttons">{budgetSections.map(item => <button className="quiet" key={item.id} onClick={() => go(item.id)}>{item.label}</button>)}</div></details>
+    {editorSection && <section id="home-budget-editor" className="stack home-budget-editor" aria-label="家計の入力・編集">
+      <div className="home-editor-heading"><h2>家計の入力・編集</h2><button className="quiet" onClick={closeEditor}>閉じる</button></div>
+      <Field label="編集する項目"><select aria-label="編集する項目" value={editorSection} onChange={event => { const next = budgetSections.find(item => item.id === event.target.value); if (next) go(next.id) }}>{budgetSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
+      <Planning key={month + editorSection} data={data} month={month} save={save} section={editorSection === 'planning' ? 'income' : editorSection} openBudget={() => go('budget')} />
+    </section>}
     {current && foodBudget > 0 && <Panel title="食費の目安">
       <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
     </Panel>}
@@ -87,9 +92,17 @@ function App() {
   const save = useLedger(s => s.update)
   const [month, setMonth] = useState(() => monthOf(today()))
   const [view, setView] = useState<View>('home')
+  const [editorSection, setEditorSection] = useState<'planning' | 'fixed' | 'budget' | null>(null)
   const [accountMode, setAccountMode] = useState<AccountView>('payments')
   const [editing, setEditing] = useState<string | null>(null)
   function go(next: View) {
+    if (next === 'planning' || next === 'fixed' || next === 'budget') {
+      setEditorSection(next)
+      setView('home')
+      requestAnimationFrame(() => document.getElementById('home-budget-editor')?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+      return
+    }
+    setEditorSection(null)
     if (next === 'records' || next === 'add') setEditing(null)
     setView(next)
     window.scrollTo(0, 0)
@@ -98,8 +111,7 @@ function App() {
     setAccountMode(mode)
     go('accounts')
   }
-  const budgeting = view === 'planning' || view === 'fixed' || view === 'budget'
-  const nav = budgeting ? 'planning' : tabs.some(t => t.id === view) ? view : 'more'
+  const nav = tabs.some(t => t.id === view) ? view : 'more'
   return <>
     <header className="top"><div className="top-inner"><div className="brand">MoneyFlow Manager<small>{data.household.name}の家計</small></div><div className="month header-month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><label className="month-label"><span aria-hidden="true">{month.slice(0, 4)}年{Number(month.slice(5))}月</span><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
           if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) { setEditing(null); setMonth(e.target.value) }
@@ -110,15 +122,7 @@ function App() {
 
       </div>}
       <ErrorNotice />
-      {view === 'home' && <Home key={month} data={data} month={month} go={go} save={save} />}
-      {budgeting && <nav className="picker-row" aria-label="予算の切り替え">
-        <Field label="予算メニュー"><select value={view} onChange={event => {
-          const next = budgetSections.find(item => item.id === event.target.value)
-          if (next) go(next.id)
-        }}>{budgetSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
-      </nav>}
-      {budgeting && <Planning key={month} data={data} month={month} save={save} section={view === 'planning' ? 'income' : view}
-        openBudget={() => go('budget')} />}
+      {view === 'home' && <Home key={month} data={data} month={month} go={go} save={save} editorSection={editorSection} closeEditor={() => setEditorSection(null)} />}
       {view === 'records' && <div className="actions">
         <button className="primary" onClick={() => go('add')}><Plus size={17} /> 買い物を追加</button>
       </div>}

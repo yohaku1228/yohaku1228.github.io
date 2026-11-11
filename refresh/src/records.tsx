@@ -65,6 +65,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
   const cash = data.payments.find(payment => payment.id === 'cash-wallet' && payment.kind === 'cash')
     ?? data.payments.find(payment => payment.id === 'cash')!
   const cards = data.payments.filter(payment => payment.kind === 'card' && payment.id !== 'orico-card')
+    .sort((a, b) => Number(/楽天|rakuten/i.test(b.name)) - Number(/楽天|rakuten/i.test(a.name)))
   const previousPayment = data.payments.find(payment => payment.id === current?.paymentId &&
     payment.id !== cash.id && !cards.some(card => card.id === payment.id))
   const rows = data.transactions.filter(t => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date))
@@ -155,10 +156,10 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
         <div className="fields purchase-meta">
           <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
           {detailed && <Field label="店舗名"><input name="merchant" defaultValue={current?.merchant} required maxLength={100} /></Field>}
-          <Field label="支払方法"><select name="payment" defaultValue={current?.paymentId ?? cash.id}>
+          <Field label="支払方法"><select aria-label="支払方法" name="payment" defaultValue={current?.paymentId ?? cards[0]?.id ?? cash.id}>
             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-            <option value={cash.id}>現金</option>
             {previousPayment && <option value={previousPayment.id}>{previousPayment.name}（登録時）</option>}
+            <option value={cash.id}>現金</option>
           </select></Field>
         </div>
         {detailed && <PurchaseLines items={current?.items ?? []} categories={data.categories} />}
