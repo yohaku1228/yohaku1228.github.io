@@ -101,14 +101,14 @@ function App() {
   const budgeting = view === 'planning' || view === 'fixed' || view === 'budget'
   const nav = budgeting ? 'planning' : tabs.some(t => t.id === view) ? view : 'more'
   return <>
-    <header className="top"><div className="top-inner"><div className="brand">MoneyFlow Manager<small>{data.household.name}の家計</small></div>{!cloudEnabled && <span className="local"><i /> 端末に保存</span>}</div></header>
-    <main className="wrap">
-      <div className="page-head">
-        <h1>{view === 'accounts' ? accountTitles[accountMode] : titles[view]}</h1>
-        {view !== 'more' && view !== 'settings' && view !== 'add' && <div className="month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
+    <header className="top"><div className="top-inner"><div className="brand">MoneyFlow Manager<small>{data.household.name}の家計</small></div><div className="month header-month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><label className="month-label"><span aria-hidden="true">{month.slice(0, 4)}年{Number(month.slice(5))}月</span><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
           if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) { setEditing(null); setMonth(e.target.value) }
-        }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
-      </div>
+        }} /></label><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div></div></header>
+    <main className="wrap">
+      {view !== 'home' && <div className="page-head">
+        <h1>{view === 'accounts' ? accountTitles[accountMode] : titles[view]}</h1>
+
+      </div>}
       <ErrorNotice />
       {view === 'home' && <Home key={month} data={data} month={month} go={go} save={save} />}
       {budgeting && <nav className="picker-row" aria-label="予算の切り替え">

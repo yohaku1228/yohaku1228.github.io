@@ -33,6 +33,12 @@ h3 { font-weight: 750; }
 .month { display: inline-flex; align-items: center; border: 1px solid var(--border); background: #fff; border-radius: 13px; max-width: 100%; }
 .month button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; }
 .month input { color: #26476b; width: 138px; min-width: 0; font-size: 16px; font-weight: 700; min-height: 44px; padding: 3px; }
+.top-inner .brand { min-width: 0; font-size: clamp(12px, 3.5vw, 16px); overflow-wrap: normal; }
+.top-inner .header-month { flex: none; border-radius: 12px; }
+.header-month button { width: 40px; }
+.header-month .month-label { position: relative; display: grid; place-items: center; width: 96px; min-height: 44px; color: #26476b; font-size: 13px; font-weight: 750; white-space: nowrap; }
+.header-month .month-label input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
+.header-month .month-label:focus-within { outline: 3px solid #276dc0; border-radius: 6px; outline-offset: -3px; }
 .stack { display: grid; gap: 16px; }
 .onboarding { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid #cbdff4; border-radius: 15px; background: #e3effd; }
 .onboarding p { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.65; }
