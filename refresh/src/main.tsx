@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, Plus, Settings2, Wallet } from 'lucide-react'
 import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
-import { cloudEnabled, getFoodAdvice } from './cloud'
+import { cloudEnabled } from './cloud'
+import { FoodChat } from './food-chat'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
 import { Calendar, Records } from './records'
@@ -46,9 +47,6 @@ function Home({ data, month, go, openPayments }: {
   const weekRemaining = week.availableThisWeek
   const dayGuide = week.daily
   const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining, daysLeft, dayGuide }
-  const requestKey = JSON.stringify(snapshot)
-  const [advice, setAdvice] = useState<{ key: string; text: string; error?: boolean } | null>(null)
-  const [busy, setBusy] = useState(false)
   const hasIncome = data.incomes.some(income => monthOf(income.date) === month)
   const foodAlert = foodBudget > 0 && foodSpent > foodBudget ? `${foodName}が予算を ${yen(foodSpent - foodBudget)} 超えています。`
     : foodBudget > 0 && foodSpent === foodBudget ? foodName + 'が今月の予算に達しました。'
@@ -72,16 +70,7 @@ function Home({ data, month, go, openPayments }: {
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
     {current && foodBudget > 0 && <Panel title="食費のアドバイス">
       <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
-      {cloudEnabled && <>
-        <button className="quiet" disabled={busy || (advice?.key === requestKey && !advice.error)} onClick={async () => {
-          setBusy(true)
-          try { setAdvice({ key: requestKey, text: await getFoodAdvice(snapshot, AbortSignal.timeout(24_000)) }) }
-          catch (error) { setAdvice({ key: requestKey, text: error instanceof Error ? error.message : '助言を取得できませんでした。', error: true }) }
-          finally { setBusy(false) }
-        }}>{busy ? '助言を作成中…' : 'AIに食費のコツを聞く'}</button>
-        <p className="hint">押すと、食費の集計額と残り日数をGeminiに送ります。</p>
-        {advice?.key === requestKey && <p className={advice.error ? 'notice' : 'advice-result'} role="status">{advice.text}</p>}
-      </>}
+      {cloudEnabled && <FoodChat key={month} snapshot={snapshot} />}
     </Panel>}
     <Panel title="今月の変動費">
       <div className="stats"><Stat label="収入から固定費を引いた額" value={hasIncome ? totals.income - totals.fixed : null} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>

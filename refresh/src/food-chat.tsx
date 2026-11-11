@@ -1,0 +1,58 @@
+import { useEffect, useRef, useState } from 'react'
+import { getFoodAdvice, type ChatMessage, type FoodSnapshot } from './cloud'
+import { Field } from './ui'
+
+export function FoodChat({ snapshot }: { snapshot: FoodSnapshot }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const active = useRef<AbortController | null>(null)
+  const end = useRef<HTMLDivElement | null>(null)
+  useEffect(() => () => { active.current?.abort() }, [])
+  useEffect(() => { if (messages.length) end.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [messages.length])
+
+  async function send(question: string) {
+    if (active.current || !question.trim()) return
+    const controller = new AbortController()
+    active.current = controller
+    const timeout = window.setTimeout(() => controller.abort(), 60_000)
+    setBusy(true)
+    setError('')
+    const pending: ChatMessage[] = [...messages, { role: 'user', content: question.trim() }]
+    // Keep complete pairs so the model receives the recent conversation in order.
+    const context = pending.slice(-11)
+    while (context.length > 1 && context.reduce((n, item) => n + item.content.length, 0) > 10_000) context.splice(0, 2)
+    try {
+      const answer = await getFoodAdvice(snapshot, controller.signal, context)
+      if (!controller.signal.aborted) {
+        setMessages([...pending, { role: 'assistant', content: answer }])
+        setDraft('')
+      }
+    } catch (failure) {
+      setError(controller.signal.aborted ? '回答に時間がかかっています。もう一度お試しください。' : failure instanceof Error ? failure.message : '回答を取得できませんでした。')
+    } finally {
+      window.clearTimeout(timeout)
+      if (active.current === controller) active.current = null
+      setBusy(false)
+    }
+  }
+
+  return <div className="food-chat">
+    {messages.length === 0 && <button className="quiet" disabled={busy} onClick={() => void send('今月の食費を見て、今日からできる工夫を教えてください。')}>AIに食費のコツを聞く</button>}
+    {messages.length > 0 && <>
+      <div className="chat-history" role="log" aria-label="食費の相談" aria-live="polite">
+        {messages.map((item, index) => <div key={index} className={'chat-message chat-' + item.role}><small>{item.role === 'user' ? 'あなた' : 'AI'}</small><p>{item.content}</p></div>)}
+        <div ref={end} />
+      </div>
+      <button className="quiet chat-reset" disabled={busy} onClick={() => { setMessages([]); setError(''); setDraft('') }}>新しい相談</button>
+    </>}
+    <form onSubmit={event => { event.preventDefault(); void send(draft) }}>
+      <Field label={messages.length ? '続けて質問する' : '食費について質問する'}><textarea value={draft} onChange={event => setDraft(event.target.value)} rows={3} maxLength={1000} disabled={busy} placeholder="例：まとめ買いで無駄を減らすには？" required /></Field>
+      <button className="primary" disabled={busy || !draft.trim()} type="submit">{busy ? '回答を作成中…' : '送信'}</button>
+    </form>
+    {busy && <p className="hint" role="status">AIが回答を作成しています。</p>}
+    {error && <p className="notice" role="alert">{error}</p>}
+    <p className="hint">送信すると食費の集計額・残り日数・直近の会話をCloudflare Workers AIに送ります。会話はこの画面を開いている間だけ保持します。</p>
+  </div>
+}

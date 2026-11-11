@@ -1,4 +1,3 @@
-const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'
 const cookieName = '__Host-kakei-session'
 const sessionSeconds = 14 * 24 * 60 * 60
 const encoder = new TextEncoder()
@@ -65,36 +64,54 @@ async function writeLedger(request, env) {
   return row ? json(200, { revision: row.revision }) : json(409, { error: '別の端末で更新されました。' })
 }
 
-async function takeGeminiQuota(env) {
+async function takeAIQuota(env) {
   return !!await env.DB.prepare(`insert into receipt_quota(day, calls) values (?, 1)
     on conflict(day) do update set calls = calls + 1 where calls < 15 returning calls`)
     .bind(new Date().toISOString().slice(0, 10)).first()
 }
 
+const defaultModel = '@cf/google/gemma-4-26b-a4b-it'
+
 async function foodAdvice(request, env) {
-  const key = env.GEMINI_API_KEY?.trim()
-  if (!key || env.GEMINI_FREE_TIER_CONFIRMED !== 'true') return json(503, { error: 'AIの設定が完了していません。' })
-  const body = await readJson(request, 1024)
+  if (!env.AI?.run) return json(503, { error: 'AIの設定が完了していません。' })
+  const body = await readJson(request, 24_000)
   const { budget, spent, weekRemaining, daysLeft, dayGuide } = body ?? {}
   if (![budget, spent, weekRemaining, daysLeft, dayGuide].every(value => Number.isSafeInteger(value) && Math.abs(value) <= 1_000_000_000) ||
-      budget < 1 || daysLeft < 1 || daysLeft > 31 || dayGuide < 0) {
+      budget < 1 || spent < 0 || weekRemaining < 0 || daysLeft < 1 || daysLeft > 31 || dayGuide < 0) {
     return json(400, { error: '今月の食費予算を確認してください。' })
   }
-  if (!await takeGeminiQuota(env)) return json(429, { error: '今日のAI利用上限に達しました。' })
-  const response = await fetch(geminiEndpoint, {
-    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20_000),
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: `5人家族向けに、今日から実行しやすい食費の工夫を日本語で2～3文、180字以内で提案してください。残日数が少ない、使いすぎ、予算内などの状況に応じてください。食事の量や必要な栄養は削らず、金額を新しく計算したり価格を推測したりしないでください。金額を挙げる場合は下記の数値だけ使ってください。Markdown不要。月間予算 ${budget}円、支出 ${spent}円、今週これから使う目安 ${weekRemaining}円、月末まで今日を含め ${daysLeft}日、1日あたりの食費の目安 ${dayGuide}円。` }] }],
-      generationConfig: { maxOutputTokens: 640 },
-    }),
-  })
-  if (response.status === 429) return json(429, { error: 'Geminiの利用上限に達しました。時間をおいてお試しください。' })
-  if (!response.ok) return json(502, { error: 'AIの助言を取得できませんでした。画面の食費の目安は引き続き使えます。' })
-  const candidate = (await response.json()).candidates?.[0]
-  const text = candidate?.content?.parts?.filter(part => !part.thought).map(part => part.text ?? '').join('').trim()
-  return candidate?.finishReason === 'STOP' && text && text.length <= 600
-    ? json(200, { text }) : json(502, { error: 'AIの助言を取得できませんでした。' })
+  const history = body.messages ?? [{ role: 'user', content: '今月の食費を見て、今日からできる工夫を教えてください。' }]
+  if (!Array.isArray(history) || history.length < 1 || history.length > 11 || history.length % 2 !== 1 ||
+      history.some((item, index) => !item || item.role !== (index % 2 === 0 ? 'user' : 'assistant') ||
+        typeof item.content !== 'string' || !item.content.trim() || item.content.length > (item.role === 'user' ? 1000 : 3000)) ||
+      history.reduce((size, item) => size + item.content.length, 0) > 10_000) {
+    return json(400, { error: '質問は1000文字以内で入力してください。会話が長い場合は新しい相談を始めてください。' })
+  }
+  if (!await takeAIQuota(env)) return json(429, { error: '今日のAI利用上限（15回）に達しました。明日またお試しください。' })
+  const remaining = budget - spent
+  const context = history.map(({ role, content }) => ({ role, content: content.trim() }))
+  while (context.length > 1 && context.reduce((size, item) => size + item.content.length, 0) > 10_000) context.splice(0, 2)
+  const messages = [{ role: 'system', content:
+    'あなたは5人家族の食費を相談する日本語アシスタントです。必ず自然な日本語で、質問に直接答え、具体的な工夫を短く3〜5文で伝えてください。' +
+    '会話の流れを踏まえて追加質問に答えてください。食事量や必要な栄養は削らないでください。店舗の実売価格や未提供の家計情報を推測しないでください。' +
+    '以下の最新集計を正として使い、過去の回答と違う場合は最新集計を優先してください。支出は変更せず、提案にとどめてください。Markdownは使わないでください。' +
+    '月間食費予算 ' + budget + '円、使用済み ' + spent + '円、残り予算 ' + remaining + '円、今週これからの目安 ' + weekRemaining +
+    '円、月末まで今日を含め ' + daysLeft + '日、1日あたりの目安 ' + dayGuide + '円。残りが負なら予算超過です。' },
+    ...context]
+  try {
+    const result = await env.AI.run(env.AI_MODEL || defaultModel, { messages, max_completion_tokens: 512, temperature: 0.4, chat_template_kwargs: { enable_thinking: false } })
+    const candidate = result?.choices?.[0]
+    const content = candidate?.message?.content ?? result?.response
+    const text = typeof content === 'string' ? content.trim() : ''
+    if (candidate && candidate.finish_reason !== 'stop') return json(502, { error: '回答を最後まで取得できませんでした。質問を短くして再試行してください。' })
+    return text && text.length <= 3000
+      ? json(200, { text }) : json(502, { error: '回答を取得できませんでした。もう一度お試しください。' })
+  } catch (error) {
+    const limited = error?.status === 429 || /quota|limit|capacity|neuron|429/i.test(String(error?.message ?? ''))
+    return json(limited ? 429 : 503, { error: limited
+      ? 'AIの利用上限に達したか、混み合っています。時間をおいてお試しください。'
+      : 'AIに接続できませんでした。時間をおいて再試行してください。' })
+  }
 }
 
 export default {

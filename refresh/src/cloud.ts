@@ -46,9 +46,12 @@ export async function pushLedger(revision: number, ledger: Ledger): Promise<numb
   return body.revision
 }
 
-export async function getFoodAdvice(totals: { budget: number; spent: number; weekRemaining: number; daysLeft: number; dayGuide: number }, signal: AbortSignal) {
+export type FoodSnapshot = { budget: number; spent: number; weekRemaining: number; daysLeft: number; dayGuide: number }
+export type ChatMessage = { role: 'user' | 'assistant'; content: string }
+
+export async function getFoodAdvice(totals: FoodSnapshot, signal: AbortSignal, messages?: ChatMessage[]) {
   const response = await request('food-advice', {
-    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(totals),
+    method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...totals, messages }),
   })
   if (!response.ok) throw new Error(await message(response, 'AIの助言を取得できませんでした。'))
   const body = await response.json()
