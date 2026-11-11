@@ -17,6 +17,7 @@ import './style.css'
 
 const tabs = [
   { id: 'home', name: 'ホーム', icon: House },
+  { id: 'dinner', name: '献立', icon: CalendarDays },
   { id: 'add', name: '支出を追加', icon: Plus },
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
@@ -27,7 +28,7 @@ const budgetSections = [
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  calendar: 'カレンダー', dinner: '晩ごはん', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
+  calendar: 'カレンダー', dinner: '献立', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
 function Home({ data, month, go, save, editorSection, closeEditor }: {
@@ -66,24 +67,21 @@ function Home({ data, month, go, save, editorSection, closeEditor }: {
       })}
     </section>
     {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
-    {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
-    <details className="panel home-edit-access"><summary>収入・固定費・変動費予算を編集</summary><div className="home-editor-buttons">{budgetSections.map(item => <button className="quiet" key={item.id} onClick={() => go(item.id)}>{item.label}</button>)}</div></details>
-    {editorSection && <section id="home-budget-editor" className="stack home-budget-editor" aria-label="家計の入力・編集">
-      <div className="home-editor-heading"><h2>家計の入力・編集</h2><button className="quiet" onClick={closeEditor}>閉じる</button></div>
-      <Field label="編集する項目"><select aria-label="編集する項目" value={editorSection} onChange={event => { const next = budgetSections.find(item => item.id === event.target.value); if (next) go(next.id) }}>{budgetSections.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field>
-      <Planning key={month + editorSection} data={data} month={month} save={save} section={editorSection === 'planning' ? 'income' : editorSection} openBudget={() => go('budget')} />
-    </section>}
+
     {current && foodBudget > 0 && <Panel title="食費の目安">
       <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
     </Panel>}
-    <DinnerCalendar key={month} data={data} month={month} save={save} />
     <Panel title="今月の変動費">
       <div className="stats"><Stat label="変動費の予算" value={totals.allocated || null} /><Stat label="使用した金額" value={totals.spent} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
       <div className="variable-breakdown">{data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}</div>
       {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
-      <button className="quiet" onClick={() => go(hasIncome ? 'budget' : 'planning')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
+      <button className="quiet" onClick={() => go('budget')}>変動費予算を編集 <ArrowRight size={16} /></button>
     </Panel>
     <MonthlyAllocation key={'allocation:' + month} data={data} month={month} save={save} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />
+    {editorSection && <section id="home-budget-editor" className="stack home-budget-editor" aria-label="家計の入力・編集">
+      <div className="home-editor-heading"><h2>{budgetSections.find(item => item.id === editorSection)?.label}を編集</h2><button className="quiet" onClick={closeEditor}>閉じる</button></div>
+      <Planning key={month + editorSection} data={data} month={month} save={save} section={editorSection === 'planning' ? 'income' : editorSection} openBudget={() => go('budget')} />
+    </section>}
   </div>
 }
 
@@ -139,9 +137,6 @@ function App() {
             { icon: ArrowLeftRight, label: accountTitles.payments, detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
             { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
-          ] },
-          { title: '献立', items: [
-            { icon: CalendarDays, label: '晩ごはん', detail: '献立カレンダー・定番・買い物リスト', open: () => go('dinner') },
           ] },
           { title: 'その他', items: [
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
