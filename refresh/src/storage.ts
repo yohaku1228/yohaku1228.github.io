@@ -64,6 +64,7 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
   })),
   settled: z.array(id),
   statementTotals: z.record(id, integer).optional(),
+  monthlyCardAmounts: z.record(id, z.object({ amount: integer, confirmed: z.boolean() })).optional(),
   legacyArchive: legacyArchiveSchema.optional(),
   transfers: records(z.object({ id, date: day, from: id, to: id, amount: amount.positive(), completed: z.boolean(), purpose: z.enum(['transfer', 'savings', 'withdrawal']) })
     .refine(transfer => transfer.from !== transfer.to)),

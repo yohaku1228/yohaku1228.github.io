@@ -50,6 +50,7 @@ export interface Ledger {
   weeklyBudgets: WeeklyBudget[]; fixed: FixedExpense[]; transactions: Transaction[]
   receipts: Receipt[]; payments: PaymentMethod[]; settled: Id[]; transfers: Transfer[]
   statementTotals?: Record<Id, Yen>
+  monthlyCardAmounts?: Record<Id, { amount: Yen; confirmed: boolean }>
   legacyArchive?: LegacyArchive
   annual: AnnualBudget[]; annualActuals: AnnualActual[]; savingsGoals: SavingsGoal[]
   milestones: FinancialMilestone[]; advice: AIAdvice[]; recipes: RecipeSuggestion[]

@@ -4,15 +4,14 @@ import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, Chevr
 import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
-import { FoodChat } from './food-chat'
+import { MonthlyAllocation } from './monthly-allocation'
 import { DinnerCalendar } from './dinner'
-import { mealContext } from './meals'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
 import { Calendar, Records } from './records'
 import { Analysis, ErrorNotice, Settings } from './settings'
 import { useLedger } from './storage'
-import { BudgetRow, Field, Panel, Stat } from './ui'
+import { BudgetRow, Field, Panel, Stat, type Save } from './ui'
 import type { Ledger } from './model'
 import './style.css'
 
@@ -32,8 +31,8 @@ const titles: Record<View, string> = {
   calendar: 'カレンダー', dinner: '晩ごはん', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
 }
 
-function Home({ data, month, go, openPayments }: {
-  data: Ledger; month: string; go: (view: View) => void; openPayments: () => void
+function Home({ data, month, go, save }: {
+  data: Ledger; month: string; go: (view: View) => void; save: Save
 }) {
   const totals = monthly(data, month)
   const date = today()
@@ -48,7 +47,6 @@ function Home({ data, month, go, openPayments }: {
   const snacksName = data.categories.find(category => category.id === 'snacks')?.name ?? 'お菓子・ジュース'
   const weekRemaining = week.availableThisWeek
   const dayGuide = week.daily
-  const snapshot = { budget: foodBudget, spent: foodSpent, weekRemaining, daysLeft, dayGuide }
   const hasIncome = data.incomes.some(income => monthOf(income.date) === month)
   const foodAlert = foodBudget > 0 && foodSpent > foodBudget ? `${foodName}が予算を ${yen(foodSpent - foodBudget)} 超えています。`
     : foodBudget > 0 && foodSpent === foodBudget ? foodName + 'が今月の予算に達しました。'
@@ -70,20 +68,17 @@ function Home({ data, month, go, openPayments }: {
     </section>
     {foodAlert && <p className="notice" role="status">{foodAlert}</p>}
     {!hasIncome && <section className="onboarding"><div><b>まず、この月の給与・予備費を入力</b><p>固定費を引いたあと、変動費に回せる金額が分かります。</p></div><button className="quiet" onClick={() => go('planning')}>入力する <ArrowRight size={16} /></button></section>}
-    {current && foodBudget > 0 && <Panel title="食費のアドバイス">
+    {current && foodBudget > 0 && <Panel title="食費の目安">
       <div className="stats"><Stat label="1日あたりの食費の目安" value={dayGuide} detail={`月の残り予算 ÷ 残り${daysLeft}日`} /><Stat label="今週これからの目安" value={weekRemaining} detail={`${week.endDate.slice(5).replace('-', '/')}まで今日を含めて${week.daysThisWeek}日`} /></div>
-      {cloudEnabled && <FoodChat key={month} snapshot={snapshot} meals={mealContext(data, date)} />}
     </Panel>}
-    <button className="quiet bank-entry" onClick={() => go('dinner')}><CalendarDays size={18} /> 晩ごはんの記録・献立相談 <ArrowRight size={16} /></button>
+    <DinnerCalendar key={month} data={data} month={month} save={save} />
     <Panel title="今月の変動費">
-      <div className="stats"><Stat label="収入から固定費を引いた額" value={hasIncome ? totals.income - totals.fixed : null} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
+      <div className="stats"><Stat label="変動費の予算" value={totals.allocated || null} /><Stat label="使用した金額" value={totals.spent} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
+      <div className="variable-breakdown">{data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}</div>
+      {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
       <button className="quiet" onClick={() => go(hasIncome ? 'budget' : 'planning')}>{hasIncome ? '変動費予算を設定・確認' : '収入から設定する'} <ArrowRight size={16} /></button>
     </Panel>
-    <button className="quiet bank-entry" onClick={openPayments}><CreditCard size={18} /> 銀行別の引落・現金支払い <ArrowRight size={16} /></button>
-    <Panel title="変動費の内訳">
-      {data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}
-      {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
-    </Panel>
+    <MonthlyAllocation key={'allocation:' + month} data={data} month={month} save={save} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />
   </div>
 }
 
@@ -115,7 +110,7 @@ function App() {
         }} /><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div>}
       </div>
       <ErrorNotice />
-      {view === 'home' && <Home key={month} data={data} month={month} go={go} openPayments={() => openAccount('payments')} />}
+      {view === 'home' && <Home key={month} data={data} month={month} go={go} save={save} />}
       {budgeting && <nav className="picker-row" aria-label="予算の切り替え">
         <Field label="予算メニュー"><select value={view} onChange={event => {
           const next = budgetSections.find(item => item.id === event.target.value)
@@ -131,7 +126,7 @@ function App() {
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
       {view === 'dinner' && <DinnerCalendar key={month} data={data} month={month} save={save} />}
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
-      {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} />}
+      {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
       {view === 'settings' && <Settings data={data} save={save} />}
       {view === 'more' && <div className="stack">

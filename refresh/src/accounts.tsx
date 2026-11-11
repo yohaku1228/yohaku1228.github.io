@@ -1,24 +1,23 @@
 import { useState } from 'react'
-import { accountProjection, activeFixed, cardBills, cashEvents, monthOf, onDay, paymentSummary, today, yen } from './finance'
+import { accountProjection, activeFixed, cardBills, cashEvents, monthOf, onDay, today, yen } from './finance'
 import type { Ledger, Month, PaymentMethod, Transfer } from './model'
 import { SubAccount } from './sub-account'
+import { MonthlyAllocation } from './monthly-allocation'
 import { Amount, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
 export const accountTitles = {
-  payments: '銀行別の引落・現金支払い',
+  payments: '銀行別の振り分け・現金',
   month: '月次の資金繰り',
   year: 'サブ口座',
   setup: '引落口座の設定',
 } as const
 export type AccountView = keyof typeof accountTitles
-export function Accounts({ data, month, save, mode }: { data: Ledger; month: Month; save: Save; mode: AccountView }) {
+export function Accounts({ data, month, save, mode, openIncome, openFixed, openRecords }: { data: Ledger; month: Month; save: Save; mode: AccountView; openIncome?: () => void; openFixed?: () => void; openRecords?: () => void }) {
   const [cardId, editCard] = useState<string | null>(null)
   const [transferVersion, bump] = useState(0)
   const [editingTransfer, setEditingTransfer] = useState<string | null>(null)
   const card = data.payments.find(p => p.id === cardId)
   const events = cashEvents(data, month)
-  const summaries = data.accounts.map(account => ({ account, ...paymentSummary(events, account.id) }))
-    .filter(({ account, payments }) => payments.length > 0 || (account.id !== 'main' && account.kind !== 'annual'))
   const bills = cardBills(data).filter(b => monthOf(b.date) >= month || !b.paid)
   const fixed = activeFixed(data, month)
   const transfers = data.transfers.filter(t => monthOf(t.date) === month)
@@ -27,28 +26,7 @@ export function Accounts({ data, month, save, mode }: { data: Ledger; month: Mon
     save(old => ({ ...old, settled: old.settled.includes(id) ? old.settled.filter(s => s !== id) : [...old.settled, id] }))
   }
   return <div className="stack">
-    {mode === 'payments' && <Panel title="今月の引落・支払い" description="登録した固定費・カード請求・現金払いを口座別に表示します。引落日が決まっていない固定費も含みます。">
-      {summaries.length ? <div className="payment-accounts">
-        {summaries.map(({ account, payments, total, remaining }) => <article className="payment-account" key={account.id}>
-          <h3>{account.name}</h3>
-          <div className="payment-figures">
-            <div><small>今月の支払い合計</small><strong><Amount value={total} /></strong></div>
-            <div><small>支払未確認</small><strong><Amount value={remaining} /></strong></div>
-          </div>
-          {payments.length > 0 && <details>
-            <summary>内訳を見る（{payments.length}件）</summary>
-            <ul className="rows">{payments.map(event => <li key={event.source + ':' + event.id}>
-              <span><b>{event.label}</b><small>{event.date ? event.date.slice(5).replace('-', '/') : '日付未設定'}</small></span>
-              <Amount value={-event.amount} />
-              {event.source === 'cash' ? <span className="hint">支払済み</span> : <label className="check">
-                <input type="checkbox" checked={event.paid} onChange={() => toggle(event.id)} /> {event.source === 'card' ? '引落済み' : '支払済み'}
-              </label>}
-            </li>)}</ul>
-          </details>}
-        </article>)}
-      </div> : <p className="empty">この月の支払いはまだ登録されていません。</p>}
-      <p className="hint">「支払未確認」は、支払済み・引落済みにしていない金額です。</p>
-    </Panel>}
+    {mode === 'payments' && <MonthlyAllocation data={data} month={month} save={save} openIncome={openIncome} openFixed={openFixed} openRecords={openRecords} />}
     {mode === 'year' ? <SubAccount data={data} month={month} save={save} /> : <>
       {mode === 'month' && <>
       <Panel title="口座別の資金繰り" description="月初残高から日付順に入出金を予測します。同じ日の出金は入金より先に計算します。日付未定の支払いは予測残高に含めず、別に表示します。">
