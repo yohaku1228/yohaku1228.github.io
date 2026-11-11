@@ -43,7 +43,7 @@ export interface FinancialMilestone { id: Id; label: string; month: Month | null
 export interface AIAdvice { id: Id; month: Month; text: string; createdAt: string }
 export interface RecipeSuggestion { id: Id; servings: number; name: string; estimatedCost: Yen; ingredients: string[]; steps: string[] }
 export interface FavoriteMeal { id: Id; name: string; notes: string }
-export interface MealRecord { id: Id; mealId: Id; name: string; date: Day; note?: string }
+export interface MealRecord { id: Id; mealId: Id; name: string; date: Day; note?: string; status?: 'planned' | 'cooked' }
 export interface Ledger {
   household: Household; users: User[]; accounts: Account[]; categories: Category[]
   incomes: Income[]; budgets: Budget[]; defaultBudget: Record<Id, Yen>
@@ -55,6 +55,9 @@ export interface Ledger {
   milestones: FinancialMilestone[]; advice: AIAdvice[]; recipes: RecipeSuggestion[]
   favoriteMeals?: FavoriteMeal[]
   mealHistory?: MealRecord[]
+  mealCatalogVersion?: 2
+  mealPreferences?: string
+  mealShopping?: { date: Day; text: string }[]
 }
 export interface LegacyArchive {
   months: Record<Month, {

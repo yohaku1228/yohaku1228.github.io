@@ -73,8 +73,11 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
   milestones: records(milestone),
   advice: records(z.object({ id, month, text: z.string(), createdAt: z.string() })),
   recipes: records(z.object({ id, servings: z.int().positive(), name: label, estimatedCost: amount, ingredients: z.array(z.string()), steps: z.array(z.string()) })),
-  favoriteMeals: records(z.object({ id, name: label.max(80), notes: z.string().max(200) })).max(40).optional(),
-  mealHistory: records(z.object({ id, mealId: id, name: label.max(80), date: day, note: z.string().max(300).optional() })).max(3000).optional(),
+  favoriteMeals: records(z.object({ id, name: label.max(80), notes: z.string().max(200) })).max(60).optional(),
+  mealHistory: records(z.object({ id, mealId: id, name: label.max(80), date: day, note: z.string().max(300).optional(), status: z.enum(['planned', 'cooked']).optional() })).max(3000).optional(),
+  mealCatalogVersion: z.literal(2).optional(),
+  mealPreferences: z.string().max(1000).optional(),
+  mealShopping: z.array(z.object({ date: day, text: z.string().max(5000) })).refine(rows => new Set(rows.map(row => row.date)).size === rows.length).optional(),
 }).refine(data => {
   const accounts = new Set(data.accounts.map(a => a.id))
   const categories = new Set(data.categories.map(c => c.id))

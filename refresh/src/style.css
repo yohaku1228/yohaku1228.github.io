@@ -104,7 +104,7 @@ input[type=checkbox] { appearance: auto; accent-color: var(--blue); width: 18px;
 .food-chat { display: grid; gap: 12px; margin-top: 16px; min-width: 0; }
 .food-chat > .quiet { justify-self: start; }
 .food-chat form { display: grid; gap: 10px; min-width: 0; }
-.food-chat textarea { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #c5d8ed; border-radius: 12px; background: #fbfdff; color: #152c49; font: inherit; font-size: 16px; line-height: 1.6; resize: vertical; scroll-margin-bottom: 120px; }
+.food-chat textarea, .meal-shopping-input { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #c5d8ed; border-radius: 12px; background: #fbfdff; color: #152c49; font: inherit; font-size: 16px; line-height: 1.6; resize: vertical; scroll-margin-bottom: 120px; }
 .food-chat form > button { justify-self: end; min-height: 44px; min-width: 88px; }
 .food-chat > .hint { margin: 0; }
 .chat-history { display: grid; gap: 12px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; min-width: 0; padding: 3px; }
@@ -190,3 +190,5 @@ summary { cursor: pointer; min-height: 44px; font-size: 14px; padding: 10px 0; c
   .onboarding { align-items: start; flex-wrap: wrap; }
 }
 @media (min-width: 690px) { .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } .account-grid, .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.meal-plan-label { display: inline-block; margin-right: 5px; padding: 2px 5px; color: #215e9f; background: #e3effe; font-size: 10px; border-radius: 5px; vertical-align: middle; }
