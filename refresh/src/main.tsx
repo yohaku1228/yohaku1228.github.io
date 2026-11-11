@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, Plus, Settings2, Wallet } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, House, Landmark, Menu, PencilLine, Plus, Settings2, Palette, Wallet } from 'lucide-react'
 import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
 import { MonthlyAllocation } from './monthly-allocation'
+import { ThemeSettings } from './theme-settings'
+import { applyTheme, cacheTheme, cachedTheme, defaultTheme } from './theme'
 import { DinnerCalendar } from './dinner'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
@@ -22,13 +24,13 @@ const tabs = [
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: 'メニュー', icon: Menu },
 ] as const
-type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings'
+type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  calendar: 'カレンダー', dinner: '献立', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定',
+  calendar: 'カレンダー', dinner: '献立', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定', theme: 'テーマ',
 }
 
 function Home({ data, month, go, save, editorSection, closeEditor }: {
@@ -88,6 +90,7 @@ function Home({ data, month, go, save, editorSection, closeEditor }: {
 function App() {
   const data = useLedger(s => s.ledger)
   const save = useLedger(s => s.update)
+  useLayoutEffect(() => { const color = data.themeColor ?? defaultTheme; applyTheme(color); cacheTheme(color) }, [data.themeColor])
   const [month, setMonth] = useState(() => monthOf(today()))
   const [view, setView] = useState<View>('home')
   const [editorSection, setEditorSection] = useState<'planning' | 'fixed' | 'budget' | null>(null)
@@ -130,6 +133,7 @@ function App() {
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
+      {view === 'theme' && <ThemeSettings data={data} save={save} />}
       {view === 'settings' && <Settings data={data} save={save} />}
       {view === 'more' && <div className="stack">
         {[
@@ -139,6 +143,7 @@ function App() {
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
           { title: 'その他', items: [
+            { icon: Palette, label: 'テーマ', detail: 'サイトのカラーを変更', open: () => go('theme') },
             { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
             { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
             { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
@@ -163,6 +168,8 @@ function App() {
     ))}</div></nav>
   </>
 }
+
+applyTheme(cachedTheme())
 
 createRoot(document.getElementById('root')!).render(<CloudGate><App /></CloudGate>)
 
