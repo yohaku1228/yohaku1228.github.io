@@ -4,28 +4,28 @@ import type { Ledger, Month } from './model'
 import { useLedger } from './storage'
 import { Amount, BudgetRow, Field, form, num, Panel, Stat, str, uid, type Save } from './ui'
 
-export function Settings({ data, save }: { data: Ledger; save: Save }) {
+export function Settings({ data, save, section = 'all' }: { data: Ledger; save: Save; section?: 'all' | 'categories' | 'household' }) {
   const [editing, edit] = useState<string | null>(null)
   const category = data.categories.find(c => c.id === editing)
   return <div className="stack">
-    <Panel title="カテゴリーと色">
+    {section !== 'household' && <Panel title="支出項目の名前・色">
       <ul className="rows">{data.categories.map(c => <li key={c.id}><b className="category"><i style={{ background: c.color }} />{c.name}</b><button className="quiet" onClick={() => edit(c.id)}>編集</button></li>)}</ul>
       <form key={category?.id ?? data.categories.length} onSubmit={form(fields => {
         const item = { id: category?.id ?? uid(), name: str(fields, 'name'), color: str(fields, 'color'), allowance: category?.allowance }
         if (save(old => ({ ...old, categories: category ? old.categories.map(c => c.id === item.id ? item : c) : [...old.categories, item] }))) edit(null)
       })}>
-        <div className="fields"><Field label="カテゴリー名"><input name="name" defaultValue={category?.name} maxLength={100} required /></Field>
+        <div className="fields"><Field label="支出項目名"><input name="name" defaultValue={category?.name} maxLength={100} required /></Field>
           <Field label="表示色"><input name="color" type="color" defaultValue={category?.color ?? '#287b51'} /></Field></div>
-        <div className="actions"><button className="primary">{category ? 'カテゴリーを更新' : 'カテゴリーを追加'}</button>{category && <button type="button" className="quiet" onClick={() => edit(null)}>取消</button>}</div>
+        <div className="actions"><button className="primary">{category ? '項目を更新' : '項目を追加'}</button>{category && <button type="button" className="quiet" onClick={() => edit(null)}>取消</button>}</div>
       </form>
-    </Panel>
-    <Panel title="家計の基本設定">
+    </Panel>}
+    {section !== 'categories' && <Panel title="家計の基本設定">
       <form onSubmit={form(fields => save(old => ({ ...old, household: { ...old.household, name: str(fields, 'name'), size: num(fields, 'size') } })))}>
         <div className="fields"><Field label="表示名"><input name="name" defaultValue={data.household.name} maxLength={100} required /></Field><Field label="家族の人数"><input name="size" type="number" min="1" max="30" defaultValue={data.household.size} required /></Field></div>
         <div className="actions"><button className="primary">設定を保存</button></div>
       </form>
       <p className="hint">iPhoneのSafariで共有 → ホーム画面に追加を選びます。「ウェブアプリとして開く」が表示されたらオンにします。初回はオンラインで開いてください。</p>
-    </Panel>
+    </Panel>}
   </div>
 }
 

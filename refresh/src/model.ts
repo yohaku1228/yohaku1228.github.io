@@ -45,6 +45,7 @@ export interface RecipeSuggestion { id: Id; servings: number; name: string; esti
 export interface FavoriteMeal { id: Id; name: string; notes: string }
 export interface MealRecord { id: Id; mealId: Id; name: string; date: Day; note?: string; status?: 'planned' | 'cooked' }
 export interface Ledger {
+  stores?: string[]
   themeColor?: string
   household: Household; users: User[]; accounts: Account[]; categories: Category[]
   incomes: Income[]; budgets: Budget[]; defaultBudget: Record<Id, Yen>

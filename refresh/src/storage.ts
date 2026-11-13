@@ -40,6 +40,7 @@ const legacyMonths = z.record(month, z.object({
 const legacyArchiveSchema = z.object({ months: legacyMonths, rakutenCount: z.int().nonnegative() })
 
 const ledgerSchema: z.ZodType<Ledger> = z.object({
+  stores: z.array(z.string().trim().min(1).max(100)).max(100).refine(rows => new Set(rows.map(s => s.normalize('NFKC').toLowerCase())).size === rows.length).optional(),
   themeColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
   household: z.object({ id, name: label, size: z.int().min(1).max(30), currency: z.literal('JPY') }),
   users: records(z.object({ id, name: label, householdId: id })).length(2),

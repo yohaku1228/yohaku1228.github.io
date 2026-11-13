@@ -3,24 +3,23 @@ import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, t
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, SwipeRow, uid, type Save } from './ui'
 
-const stores = ['ヤマザワ', 'ヨークベニマル', 'おーばん', '業務スーパー', 'カワチ', 'ツルハ']
+import { storesFor } from './stores'
 
-function QuickPurchase({ categories, current }: { categories: Ledger['categories']; current?: Transaction }) {
+function QuickPurchase({ categories, stores, current }: { categories: Ledger['categories']; stores: string[]; current?: Transaction }) {
   const [category, setCategory] = useState(current?.items[0].categoryId ?? 'food')
-  const [store, setStore] = useState(current?.merchant ? stores.includes(current.merchant) ? current.merchant : 'other' : '')
-  const allowance = categories.find(item => item.id === category)?.allowance
+  const [store, setStore] = useState(current?.merchant ? stores.includes(current.merchant) ? 'named:' + current.merchant : 'other' : '')
   return <>
-    <Field label="変動費の項目"><select name="category" value={category} onChange={event => setCategory(event.target.value)}>
+    <Field label="変動費の項目"><select aria-label="変動費の項目" name="category" value={category} onChange={event => setCategory(event.target.value)}>
       {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
     </select></Field>
-    {!allowance && <div className="store-fields">
-      <Field label="店舗"><select name="store" required value={store} onChange={event => setStore(event.target.value)}>
+    <div className="store-fields">
+      <Field label="店舗"><select aria-label="店舗" name="store" required value={store} onChange={event => setStore(event.target.value)}>
         <option value="" disabled>店舗を選ぶ</option>
-        {stores.map(name => <option key={name} value={name}>{name}</option>)}
+        {stores.map(name => <option key={name} value={'named:' + name}>{name}</option>)}
         <option value="other">その他（手入力）</option>
       </select></Field>
       {store === 'other' && <Field label="店舗名"><input name="merchant" defaultValue={current && !stores.includes(current.merchant) ? current.merchant : ''} required maxLength={100} /></Field>}
-    </div>}
+    </div>
     <div className="purchase-total">
       <Field label="支払合計（税込・円）"><Money name="amount" value={current ? transactionAmount(current) : undefined} negative /></Field>
     </div>
@@ -60,6 +59,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
 }) {
   const [formVersion, setFormVersion] = useState(0)
   const [saved, setSaved] = useState(false)
+  const stores = storesFor(data)
   const current = data.transactions.find(t => t.id === editing)
   const detailed = !!current && (current.items.length > 1 || !!current.externalTax || current.items.some(item => item.discount || item.quantity !== 1))
   const cash = data.payments.find(payment => payment.id === 'cash-wallet' && payment.kind === 'cash')
@@ -85,33 +85,32 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
       {current && <h2>支出を編集</h2>}
       <form className={mode === 'add' ? 'quick-entry' : undefined} key={(current?.id ?? month) + formVersion} onSubmit={form(fields => {
         const categories = fields.getAll('category').map(String)
-        const allowanceLines = categories.filter(id => data.categories.find(c => c.id === id)?.allowance)
-        const allowance = allowanceLines.length > 0
         const date = str(fields, 'date')
         const paymentId = str(fields, 'payment')
         const fixedExpenseId = str(fields, 'fixed') || undefined
         const store = str(fields, 'store')
-        const merchant = allowance ? 'お小遣い支給' : stores.includes(store) ? store : str(fields, 'merchant')
+        const selectedStore = store.startsWith('named:') ? store.slice(6) : ''
+        const merchant = stores.includes(selectedStore) ? selectedStore : str(fields, 'merchant')
         const names = fields.getAll('item-name').map(value => String(value).trim())
         const amounts = fields.getAll('amount').map(Number)
         const discounts = fields.getAll('discount').map(Number)
         const items = detailed ? fields.getAll('item-id').map((value, index) => ({
           id: String(value),
-          name: allowance ? merchant : names[index] || merchant,
+          name: names[index] || merchant,
           categoryId: categories[index],
           quantity: current?.items.find(item => item.id === value)?.quantity ?? 1,
           amount: amounts[index],
           discount: discounts[index],
         })) : [{
           id: current?.items[0].id ?? uid(),
-          name: allowance || current?.items[0].name === current?.merchant ? merchant : current?.items[0].name ?? merchant,
+          name: current?.items[0].name === current?.merchant ? merchant : current?.items[0].name ?? merchant,
           categoryId: categories[0], quantity: 1, amount: amounts[0], discount: 0,
         }]
         const record: Transaction = {
           id: current?.id ?? uid(), date, merchant, paymentId, fixedExpenseId,
-          memo: allowance ? '' : str(fields, 'memo'), personal: fields.has('personal') && !allowance,
+          memo: str(fields, 'memo'), personal: fields.has('personal'),
           items,
-          externalTax: allowance ? undefined : Number(fields.get('external-tax')) || undefined,
+          externalTax: Number(fields.get('external-tax')) || undefined,
           receiptId: current?.receiptId,
         }
         const payment = data.payments.find(p => p.id === paymentId)
@@ -123,14 +122,13 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
           transactionAmount(t) === transactionAmount(record))
         if (duplicate && !window.confirm('同日・同じ店舗・同じ金額の記録があります。別の支出として保存しますか？')) return
         if (save(old => {
-          if (allowance && items.length !== 1) throw new Error('お小遣いの支給は、買い物と分けて1件で記録してください。')
           if (items.some(item => item.discount > Math.max(0, item.amount))) {
             throw new Error('割引は各明細の金額以下にしてください。返金の割引は0円です。')
           }
           if (record.fixedExpenseId) {
             const usageMonth = monthOf(record.date)
             const target = activeFixed(old, usageMonth).find(f => f.id === record.fixedExpenseId)
-            if (!target || record.personal || allowance || transactionAmount(record) < 0) {
+            if (!target || record.personal || transactionAmount(record) < 0) {
               throw new Error('固定費に紐づける場合は、対象月の共通支出を選んでください。')
             }
             if (old.settled.includes(`fixed:${target.id}:${usageMonth}`)) {
@@ -152,7 +150,7 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
           setFormVersion(v => v + 1)
         }
       })}>
-        {!detailed && <QuickPurchase categories={data.categories} current={current} />}
+        {!detailed && <QuickPurchase categories={data.categories} stores={stores} current={current} />}
         <div className="fields purchase-meta">
           <Field label="利用日"><input type="date" name="date" required defaultValue={current?.date ?? (monthOf(today()) === month ? today() : onDay(month, 1))} /></Field>
           {detailed && <Field label="店舗名"><input name="merchant" defaultValue={current?.merchant} required maxLength={100} /></Field>}
@@ -162,15 +160,15 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
             <option value={cash.id}>現金</option>
           </select></Field>
         </div>
+        <Field label="使い道メモ（任意）"><textarea aria-label="使い道メモ（任意）" className="meal-shopping-input" name="memo" defaultValue={current?.memo} maxLength={500} rows={2} placeholder="例：昼食、仕事で使う文具、友人との食事" /></Field>
         {detailed && <PurchaseLines items={current?.items ?? []} categories={data.categories} />}
         {!!current?.externalTax && <div className="fields">
           <Field label="外税（円）"><Money name="external-tax" value={current.externalTax} required={false} /></Field>
         </div>}
-        <details open={!!(current?.fixedExpenseId || current?.memo || current?.personal)}>
-          <summary>メモ・その他の設定</summary>
+        <details open={!!(current?.fixedExpenseId || current?.personal)}>
+          <summary>その他の設定</summary>
           <div className="fields">
             {data.fixed.length > 0 && <Field label="固定費に紐づける"><select name="fixed" defaultValue={current?.fixedExpenseId ?? ''}><option value="">生活費として記録</option>{data.fixed.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
-            <Field label="メモ"><input name="memo" defaultValue={current?.memo} maxLength={500} placeholder="任意" /></Field>
           </div>
           <label className="check"><input type="checkbox" name="personal" defaultChecked={current?.personal} /> 個人の買い物として生活費から除外</label>
         </details>

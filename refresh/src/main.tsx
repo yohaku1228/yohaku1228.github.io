@@ -6,6 +6,7 @@ import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
 import { MonthlyAllocation } from './monthly-allocation'
 import { ThemeSettings } from './theme-settings'
+import { StoreSettings } from './store-settings'
 import { applyTheme, cacheTheme, cachedTheme, defaultTheme } from './theme'
 import { DinnerCalendar } from './dinner'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
@@ -22,15 +23,15 @@ const tabs = [
   { id: 'dinner', name: '献立', icon: CalendarDays },
   { id: 'add', name: '支出を追加', icon: Plus },
   { id: 'records', name: '記録', icon: PencilLine },
-  { id: 'more', name: 'メニュー', icon: Menu },
+  { id: 'more', name: '設定', icon: Settings2 },
 ] as const
-type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme'
+type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme' | 'stores' | 'categories'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  calendar: 'カレンダー', dinner: '献立', more: 'メニュー', accounts: '口座と振込', analysis: '家計の分析', settings: '設定', theme: 'テーマ',
+  calendar: 'カレンダー', dinner: '献立', more: '設定', accounts: '口座と振込', analysis: '家計の分析', settings: '家計の基本設定', theme: 'テーマ', stores: '店舗', categories: '支出項目',
 }
 
 function Home({ data, month, go, save, editorSection, closeEditor }: {
@@ -133,8 +134,10 @@ function App() {
       {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
+      {view === 'stores' && <StoreSettings data={data} save={save} />}
+      {view === 'categories' && <Settings data={data} save={save} section="categories" />}
       {view === 'theme' && <ThemeSettings data={data} save={save} />}
-      {view === 'settings' && <Settings data={data} save={save} />}
+      {view === 'settings' && <Settings data={data} save={save} section="household" />}
       {view === 'more' && <div className="stack">
         {[
           { title: '引落・口座', items: [
@@ -142,9 +145,14 @@ function App() {
             { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
+          { title: '支出の設定', items: [
+            { icon: House, label: '店舗', detail: '店舗の追加・名前の変更・候補から削除', open: () => go('stores') },
+            { icon: PencilLine, label: '支出項目', detail: '食費・お小遣いなどの名前・色', open: () => go('categories') },
+          ] },
+
           { title: 'その他', items: [
             { icon: Palette, label: 'テーマ', detail: 'サイトのカラーを変更', open: () => go('theme') },
-            { icon: Settings2, label: '家計の設定', detail: '家計の名前・カテゴリー', open: () => go('settings') },
+            { icon: Settings2, label: '家計の基本設定', detail: '家計の名前・家族の人数', open: () => go('settings') },
             { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
             { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
           ] },
