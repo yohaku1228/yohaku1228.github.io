@@ -4,6 +4,7 @@ import { favoritesFor, mealCandidates, mealContext, mealOverview, normalizeMealI
 import { daysInMonth, foodWeek, monthly, monthOf, today } from './finance'
 import { Field, Panel, SwipeRow, form, str, uid, type Save } from './ui'
 import { FoodChat } from './food-chat'
+import { FlyerViewerButton } from './FlyerViewerButton'
 import { cloudEnabled } from './cloud'
 
 export function DinnerCalendar({ data, month, save }: { data: Ledger; month: string; save: Save }) {
@@ -32,6 +33,7 @@ export function DinnerCalendar({ data, month, save }: { data: Ledger; month: str
     if (save(old => ({ ...old, mealShopping: [...(old.mealShopping ?? []).filter(row => row.date !== selected), { date: selected, text }] }))) { setShoppingVersion(v => v + 1); setShoppingNotice('買い物メモをクラウドに保存しました。') }
   }
   return <div className="stack">
+    <FlyerViewerButton />
     <Panel title="晩ごはんカレンダー">
       <div className="calendar dinner-calendar">
         {['日', '月', '火', '水', '木', '金', '土'].map(d => <b className="weekday" key={d}>{d}</b>)}

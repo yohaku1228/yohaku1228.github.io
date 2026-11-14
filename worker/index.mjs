@@ -1,4 +1,5 @@
 import { dinnerContext } from './meal-context.mjs'
+import { flyersResponse } from './flyers.mjs'
 
 const cookieName = '__Host-kakei-session'
 const sessionSeconds = 14 * 24 * 60 * 60
@@ -134,9 +135,10 @@ async function foodAdvice(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url)
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
+    if (url.pathname === '/api/flyers') return flyersResponse(request, ctx)
     if (!env.APP_PASSWORD || env.APP_PASSWORD.length < 24 || !env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
       return json(503, { error: 'ログインの初期設定が必要です。' })
     }
