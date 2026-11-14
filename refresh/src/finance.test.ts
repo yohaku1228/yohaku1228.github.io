@@ -82,7 +82,7 @@ test('固定費をカードで払った場合は登録した引落だけを資�
 test('月をまたぐ週を月ごとに分けて、月間食費と一致する', () => {
   const ledger = starter()
   ledger.defaultBudget = { food: 10_000 }
-  const weeks = [1, 7, 14, 21, 28].map(day => foodWeek(ledger, '2026-12', `2026-12-${String(day).padStart(2, '0')}`))
+  const weeks = [1, 6, 13, 20, 27].map(day => foodWeek(ledger, '2026-12', `2026-12-${String(day).padStart(2, '0')}`))
   assert.equal(weeks.at(-1)?.endDate, '2026-12-31')
   assert.equal(weeks.reduce((total, week) => total + week.allocated, 0), 10_000)
 })
@@ -94,13 +94,30 @@ test('食費の目安は月の残りを今日からの日数で割り、まと�
   const week = foodWeek(ledger, '2026-11', '2026-11-11')
   assert.equal(week.remaining, 435)
   assert.equal(week.daysLeft, 20)
-  assert.equal(week.daysThisWeek, 5)
+  assert.equal(week.daysThisWeek, 4)
   assert.equal(week.daily, 2321)
-  assert.equal(week.availableThisWeek, 11608)
+  assert.equal(week.availableThisWeek, 9287)
   assert.equal(foodWeek(ledger, '2026-11', '2026-11-30').daily, 46435)
   ledger.defaultBudget.food = 10000
   assert.equal(foodWeek(ledger, '2026-11', '2026-11-11').daily, 0)
   assert.equal(foodWeek(ledger, '2026-11', '2026-11-11').availableThisWeek, 0)
+})
+
+test('食費の週は日曜日から土曜日で区切り、月末で打ち切る', () => {
+  const ledger = starter()
+  ledger.defaultBudget = { food: 60000 }
+  const sunday = foodWeek(ledger, '2026-11', '2026-11-15')
+  assert.equal(sunday.startDate, '2026-11-15')
+  assert.equal(sunday.endDate, '2026-11-21')
+  assert.equal(sunday.daysThisWeek, 7)
+  assert.equal(sunday.availableThisWeek, 26250)
+  const saturday = foodWeek(ledger, '2026-11', '2026-11-14')
+  assert.equal(saturday.startDate, '2026-11-08')
+  assert.equal(saturday.endDate, '2026-11-14')
+  assert.equal(saturday.daysThisWeek, 1)
+  const monthEnd = foodWeek(ledger, '2026-11', '2026-11-29')
+  assert.equal(monthEnd.endDate, '2026-11-30')
+  assert.equal(monthEnd.daysThisWeek, 2)
 })
 
 test('外税は商品を増やさず、カテゴリー予算とカード請求の合計に含める', () => {

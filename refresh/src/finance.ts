@@ -231,7 +231,7 @@ export function accountProjection(account: Account, events: CashEvent[], month: 
 
 export function foodWeek(data: Ledger, month: Month, selected: Day) {
   const focus = monthOf(selected) === month ? selected : onDay(month, 1)
-  const weekday = (new Date(focus + 'T00:00:00Z').getUTCDay() + 6) % 7
+  const weekday = new Date(focus + 'T00:00:00Z').getUTCDay()
   const day = Number(focus.slice(8))
   const start = Math.max(1, day - weekday)
   const end = Math.min(daysInMonth(month), day - weekday + 6)
