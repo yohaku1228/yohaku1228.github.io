@@ -12,5 +12,6 @@ test('supermarkets including Gyomu precede drugs and home centers, available she
   assert.equal(ordered[5].id, 'tsuruha')
   assert.equal(ordered[7].id, 'musashi')
   assert.equal(ordered.find(store => store.id === 'gyomu')?.category, 'supermarket')
-  assert.equal(orderFlyers(stores, { aeon: true, yamazawa: false })[0].id, 'aeon')
+  assert.equal(ordered[4].id, 'aeon')
+  assert.equal(orderFlyers(stores, { aeon: true, yamazawa: false })[4].id, 'aeon')
 })
