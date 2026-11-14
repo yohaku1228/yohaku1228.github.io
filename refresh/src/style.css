@@ -240,3 +240,10 @@ summary { cursor: pointer; min-height: 44px; font-size: 14px; padding: 10px 0; c
 .focus-food progress { --progress-fill: var(--on-accent); }
 .theme-form { display: grid; gap: 12px; }
 .field .theme-color-input { width: 100%; max-width: 320px; min-height: 72px; padding: 8px; cursor: pointer; }
+.budget-detail-toggle { display: block; width: 100%; min-height: 48px; text-align: left; color: inherit; font: inherit; border-radius: 8px; }
+.budget-detail-toggle:hover { background: var(--surface); }
+.category-detail-list { padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.category-detail-list .amount { white-space: nowrap; }
+.record-total { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding-block: 8px 14px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.record-total > span { color: var(--muted); font-size: 13px; }
+.record-total strong { font-size: 24px; overflow-wrap: anywhere; }

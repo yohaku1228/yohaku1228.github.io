@@ -11,7 +11,8 @@ import { applyTheme, cacheTheme, cachedTheme, defaultTheme } from './theme'
 import { DinnerCalendar } from './dinner'
 import { addMonths, daysInMonth, foodWeek, monthly, monthOf, today, yen } from './finance'
 import { Planning } from './planning'
-import { Calendar, Records } from './records'
+import { Records } from './records'
+import { CategoryDetails } from './category-details'
 import { Analysis, ErrorNotice, Settings } from './settings'
 import { useLedger } from './storage'
 import { BudgetRow, Field, Panel, Stat, type Save } from './ui'
@@ -25,13 +26,13 @@ const tabs = [
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: '設定', icon: Settings2 },
 ] as const
-type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget' | 'calendar' | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme' | 'stores' | 'categories'
+type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget'  | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme' | 'stores' | 'categories'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  calendar: 'カレンダー', dinner: '献立', more: '設定', accounts: '口座と振込', analysis: '家計の分析', settings: '家計の基本設定', theme: 'テーマ', stores: '店舗', categories: '支出項目',
+  dinner: '献立', more: '設定', accounts: '口座と振込', analysis: '家計の分析', settings: '家計の基本設定', theme: 'テーマ', stores: '店舗', categories: '支出項目',
 }
 
 function Home({ data, month, go, save, editorSection, closeEditor }: {
@@ -76,7 +77,7 @@ function Home({ data, month, go, save, editorSection, closeEditor }: {
     </Panel>}
     <Panel title="今月の変動費">
       <div className="stats"><Stat label="変動費の予算" value={totals.allocated || null} /><Stat label="使用した金額" value={totals.spent} /><Stat label="変動費予算の残り" value={totals.allocated ? totals.remaining : null} /></div>
-      <div className="variable-breakdown">{data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <BudgetRow key={c.id} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}</div>
+      <div className="variable-breakdown">{data.categories.filter(c => totals.budget.amounts[c.id] || totals.categorySpend[c.id]).map(c => <CategoryDetails key={month + c.id} data={data} month={month} category={c} cap={totals.budget.amounts[c.id] ?? 0} used={totals.categorySpend[c.id] ?? 0} />)}</div>
       {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
       <button className="quiet" onClick={() => go('budget')}>変動費予算を編集 <ArrowRight size={16} /></button>
     </Panel>
@@ -128,10 +129,9 @@ function App() {
       {view === 'records' && <div className="actions">
         <button className="primary" onClick={() => go('add')}><Plus size={17} /> 買い物を追加</button>
       </div>}
-      {(view === 'records' || view === 'add') && <Records key={view} mode={view === 'add' ? 'add' : 'history'} data={data}
+      {(view === 'records' || view === 'add') && <Records key={view + month} mode={view === 'add' ? 'add' : 'history'} data={data}
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
       {view === 'dinner' && <DinnerCalendar key={month} data={data} month={month} save={save} />}
-      {view === 'calendar' && <Calendar data={data} month={month} edit={id => { go('records'); setEditing(id) }} />}
       {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />}
       {view === 'analysis' && <Analysis data={data} month={month} />}
       {view === 'stores' && <StoreSettings data={data} save={save} />}
@@ -154,7 +154,6 @@ function App() {
             { icon: Palette, label: 'テーマ', detail: 'サイトのカラーを変更', open: () => go('theme') },
             { icon: Settings2, label: '家計の基本設定', detail: '家計の名前・家族の人数', open: () => go('settings') },
             { icon: BarChart3, label: '家計の分析', detail: '支出の推移・貯蓄の見通し', open: () => go('analysis') },
-            { icon: CalendarDays, label: 'カレンダー', detail: '支出・支払いを日付で見る', open: () => go('calendar') },
           ] },
         ].map(group => <section className="menu-section" key={group.title}>
           <h2>{group.title}</h2>

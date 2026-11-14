@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { activeFixed, cashEvents, daysInMonth, debitDate, monthOf, onDay, sum, today, transactionAmount, transactionItemAmounts, yen } from './finance'
+import { activeFixed, debitDate, monthOf, onDay, sum, today, transactionAmount, yen } from './finance'
 import type { Day, Ledger, Month, Transaction, TransactionItem } from './model'
 import { Amount, Field, form, Money, Panel, str, SwipeRow, uid, type Save } from './ui'
 
 import { storesFor } from './stores'
+import { SpendingCalendar } from './spending-calendar'
+import { expenseRecords, recordAmount } from './expense-records'
 
 function QuickPurchase({ categories, stores, current }: { categories: Ledger['categories']; stores: string[]; current?: Transaction }) {
   const [category, setCategory] = useState(current?.items[0].categoryId ?? 'food')
@@ -59,6 +61,10 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
 }) {
   const [formVersion, setFormVersion] = useState(0)
   const [saved, setSaved] = useState(false)
+  const [selection, setSelection] = useState<{ month: string; day: string | null }>({ month, day: null })
+  const selectedDay = selection.month === month ? selection.day : null
+  const [categoryFilter, setCategoryFilter] = useState({ month, value: '' })
+  const category = categoryFilter.month === month ? categoryFilter.value : ''
   const stores = storesFor(data)
   const current = data.transactions.find(t => t.id === editing)
   const detailed = !!current && (current.items.length > 1 || !!current.externalTax || current.items.some(item => item.discount || item.quantity !== 1))
@@ -68,7 +74,8 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
     .sort((a, b) => Number(/楽天|rakuten/i.test(b.name)) - Number(/楽天|rakuten/i.test(a.name)))
   const previousPayment = data.payments.find(payment => payment.id === current?.paymentId &&
     payment.id !== cash.id && !cards.some(card => card.id === payment.id))
-  const rows = data.transactions.filter(t => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date))
+  const monthlyRows = expenseRecords(data, month, category)
+  const rows = expenseRecords(data, month, category, selectedDay)
   function remove(transaction: Transaction) {
     if (!window.confirm('この支出記録を削除しますか？')) return
     save(old => {
@@ -80,6 +87,10 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
     })
   }
   return <div className="stack">
+    {mode === 'history' && <>
+      <SpendingCalendar month={month} rows={monthlyRows} selected={selectedDay} category={category} onSelect={day => { setSelection({ month, day }); if (day === null) setCategoryFilter({ month, value: '' }); setEditing(null); setSaved(false) }} />
+      <Field label="項目で絞り込み"><select aria-label="項目で絞り込み" value={category} onChange={event => { setCategoryFilter({ month, value: event.target.value }); setEditing(null) }}><option value="">すべての項目</option>{data.categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+    </>}
     {saved && <p className="save-success" role="status">支出を保存しました。</p>}
     {(mode === 'add' || current) && <section className="panel">
       {current && <h2>支出を編集</h2>}
@@ -175,59 +186,13 @@ export function Records({ data, month, save, mode, editing, setEditing, setMonth
         <div className="actions"><button className="primary">支出を保存</button>{current && <button type="button" className="quiet" onClick={() => setEditing(null)}>取消</button>}</div>
       </form>
     </section>}
-    {mode === 'history' && <Panel title="この月の履歴">
+    {mode === 'history' && <Panel title={selectedDay ? selectedDay.replaceAll('-', '/') + ' の明細' : category ? (data.categories.find(item => item.id === category)?.name ?? '') + 'の明細（今月）' : '今月すべての明細'}>
+      <div className="record-total"><span>{rows.length}件の記録合計</span><strong><Amount value={sum(rows.map(row => recordAmount(row, category)))} /></strong></div>
       {rows.length === 0 && <p className="empty">まだ支出がありません。</p>}
       <ul className="rows">{rows.map(t => <SwipeRow key={t.id} label={t.merchant} onRemove={() => remove(t)}>
         <span><b>{t.merchant}</b><small>{t.date} ・ {t.items.length > 1 ? `${t.items.length}明細` : data.categories.find(c => c.id === t.items[0].categoryId)?.name}{t.personal ? ' ・ 個人' : ''}</small>{t.memo && <small>{t.memo}</small>}</span>
-        <Amount value={transactionAmount(t)} /><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button>
+        <Amount value={recordAmount(t, category)} /><button className="quiet" onClick={() => { setEditing(t.id); window.scrollTo(0, 0) }}>編集</button>
       </SwipeRow>)}</ul>
     </Panel>}
-  </div>
-}
-
-export function Calendar({ data, month, edit }: { data: Ledger; month: Month; edit: (id: string) => void }) {
-  const [mode, setMode] = useState<'spent' | 'due'>('spent')
-  const [category, setCategory] = useState('')
-  const [selectedDay, selectDay] = useState<Day>(monthOf(today()) === month ? today() : onDay(month, 1))
-  const selected = monthOf(selectedDay) === month ? selectedDay : onDay(month, 1)
-  const first = new Date(onDay(month, 1) + 'T00:00:00Z').getUTCDay()
-  const transactions = data.transactions.filter(t => !t.personal && monthOf(t.date) === month)
-  const events = cashEvents(data, month).filter(e => e.date && e.amount < 0)
-  const list = (date: Day) => transactions.filter(t => t.date === date && t.items.some(i => !category || i.categoryId === category))
-  const itemSum = (transaction: Transaction) => category
-    ? sum(transactionItemAmounts(transaction).filter((_, index) => transaction.items[index].categoryId === category))
-    : transactionAmount(transaction)
-  return <div className="stack">
-    <Panel title="家計カレンダー">
-      <div className="fields">
-        <Field label="表示する日付"><select value={mode} onChange={event => setMode(event.target.value === 'due' ? 'due' : 'spent')}>
-          <option value="spent">利用日</option><option value="due">支払日</option>
-        </select></Field>
-        {mode === 'spent' && <Field label="カテゴリー"><select value={category} onChange={e => setCategory(e.target.value)}>
-          <option value="">すべて</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select></Field>}
-      </div>
-      <div className="calendar">
-        {['日', '月', '火', '水', '木', '金', '土'].map(d => <span className="weekday" key={d}>{d}</span>)}
-        {Array.from({ length: first }, (_, i) => <span key={'empty' + i} />)}
-        {Array.from({ length: daysInMonth(month) }, (_, i) => {
-          const date = onDay(month, i + 1)
-          const records = list(date)
-          const due = events.filter(e => e.date === date)
-          const value = mode === 'spent' ? sum(records.map(itemSum)) : -sum(due.map(e => e.amount))
-          const categories = new Set(records.flatMap(t => t.items.filter(item => !category || item.categoryId === category).map(item => item.categoryId)))
-          const hasRecords = mode === 'spent' ? records.length > 0 : due.length > 0
-          return <button className="day" key={date} aria-pressed={date === selected} aria-label={date + (hasRecords ? ' ' + yen(value) : '')} onClick={() => selectDay(date)}>
-            <b>{i + 1}</b>{hasRecords && <small>{value.toLocaleString('ja-JP')}</small>}
-            {mode === 'spent' && <span className="dots">{[...categories].map(id => <i key={id} style={{ background: data.categories.find(c => c.id === id)?.color }} />)}</span>}
-          </button>
-        })}
-      </div>
-    </Panel>
-    <Panel title={selected + ' の明細'}>
-      {mode === 'spent' ? <ul className="rows">{list(selected).map(t => <li key={t.id}><span><b>{t.merchant}</b>{t.items.filter(i => !category || i.categoryId === category).map(i => <small key={i.id}>{i.name} ・ {yen(i.amount - i.discount)}</small>)}{!category && !!t.externalTax && <small>外税 ・ {yen(t.externalTax)}</small>}</span><Amount value={itemSum(t)} /><button className="quiet" onClick={() => edit(t.id)}>編集</button></li>)}</ul>
-        : <ul className="rows">{events.filter(e => e.date === selected).map(e => <li key={e.id}><span><b>{e.label}</b><small>{e.paid ? '済' : '予定'}</small></span><Amount value={-e.amount} /></li>)}</ul>}
-      {(mode === 'spent' ? list(selected).length === 0 : !events.some(e => e.date === selected)) && <p className="empty">この日の記録はありません。</p>}
-    </Panel>
   </div>
 }
