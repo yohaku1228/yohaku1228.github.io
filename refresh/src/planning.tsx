@@ -140,9 +140,13 @@ export function Planning({ data, month, save, section, openBudget }: {
       {!editingFixed && <div className="actions"><button className="quiet" onClick={() => openFixed('new')}>＋ 固定費を追加</button>
         <button className="primary" onClick={openBudget}>変動費を配分</button></div>}
       {editingFixed && <form id="fixed-form" key={editingFixed} onSubmit={form(fields => {
+        const method = str(fields, 'payment-method')
+        const kind = method.slice(0, method.indexOf(':'))
+        const id = method.slice(method.indexOf(':') + 1)
+        const payment = data.payments.find(p => p.id === id && p.kind === kind)
         const record: FixedExpense = {
-          id: fixed?.id ?? uid(), name: str(fields, 'name'), amount: num(fields, 'amount'), accountId: str(fields, 'account'),
-          cardPaymentId: fixed?.cardPaymentId,
+          id: fixed?.id ?? uid(), name: str(fields, 'name'), amount: num(fields, 'amount'), accountId: payment?.accountId ?? id,
+          cardPaymentId: kind === 'card' ? payment?.id : undefined, cashPaymentId: kind === 'cash' ? payment?.id : undefined,
           dueDay: str(fields, 'day') ? num(fields, 'day') : null, startMonth: str(fields, 'start'),
           endMonth: str(fields, 'end') || null, kind: str(fields, 'kind') as FixedExpense['kind'],
         }
@@ -154,10 +158,12 @@ export function Planning({ data, month, save, section, openBudget }: {
           <Field label="引落日（日）"><input name="day" type="number" min="1" max="31" defaultValue={fixed?.dueDay ?? ''} placeholder="未定" /></Field>
           <Field label="開始月"><input type="month" name="start" defaultValue={fixed?.startMonth || month} required /></Field>
           <Field label="終了月"><input type="month" name="end" defaultValue={fixed?.endMonth ?? ''} /></Field>
-          {fixedCard ? <>
-            <input type="hidden" name="account" value={fixedCard.accountId} />
-            <p className="hint">{fixedCard.name} → {data.accounts.find(a => a.id === fixedCard.accountId)?.name}。変更は「引落口座の設定」から行えます。</p>
-          </> : <Field label="口座"><select name="account" defaultValue={fixed?.accountId ?? 'main'}>{data.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>}
+          <Field label="支払・引落方法"><select aria-label="支払・引落方法" name="payment-method" required defaultValue={fixed?.cardPaymentId ? 'card:' + fixed.cardPaymentId : fixed?.cashPaymentId ? 'cash:' + fixed.cashPaymentId : fixed ? 'account:' + fixed.accountId : ''}>
+            <option value="" disabled>選んでください</option>
+            <optgroup label="カード払い">{data.payments.filter(p => p.kind === 'card').map(p => <option key={p.id} value={'card:' + p.id}>{p.name} → {data.accounts.find(a => a.id === p.accountId)?.name}</option>)}</optgroup>
+            <optgroup label="銀行からの引落">{data.accounts.filter(a => a.name !== '現金').map(a => <option key={a.id} value={'account:' + a.id}>{a.name}</option>)}</optgroup>
+            <optgroup label="現金払い">{data.payments.filter(p => p.kind === 'cash').map(p => <option key={p.id} value={'cash:' + p.id}>現金{data.payments.filter(p => p.kind === 'cash').length > 1 ? '（' + p.name + '）' : ''}</option>)}</optgroup>
+          </select></Field>
           <Field label="種類"><select name="kind" defaultValue={fixed?.kind ?? 'expense'}><option value="expense">固定費</option><option value="asset">資産形成</option></select></Field>
         </div>
         <div className="actions"><button className="primary">{fixed ? '固定費を更新' : '固定費を保存'}</button><button type="button" className="quiet" onClick={() => setEditingFixed(null)}>取消</button></div>

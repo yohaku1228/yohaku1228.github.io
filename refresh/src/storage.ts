@@ -3,7 +3,8 @@ import { create } from 'zustand'
 import { daysInMonth, monthOf } from './finance'
 import type { Ledger } from './model'
 import { starter } from './seed'
-import { pushLedger, cloudEnabled } from './cloud'
+import { pushLedger, pullLedger, cloudEnabled } from './cloud'
+import { mergeLedgers, sameLedger, type SyncConflict } from './sync-merge'
 
 const id = z.string().min(1).max(200)
 const label = z.string().trim().min(1).max(200)
@@ -16,7 +17,7 @@ const dayOfMonth = z.int().min(1).max(31)
 const route = z.enum(['deposit', 'budget', 'reserve', 'direct', 'undecided'])
 const amounts = z.record(id, amount)
 const fixed = z.object({
-  id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(), cardPaymentId: id.optional(),
+  id, name: label, amount, accountId: id, dueDay: dayOfMonth.nullable(), cardPaymentId: id.optional(), cashPaymentId: id.optional(),
   startMonth: z.union([month, z.literal('')]), endMonth: month.nullable(), kind: z.enum(['expense', 'asset']),
 }).refine(item => !item.endMonth || item.endMonth >= item.startMonth)
 const annual = z.object({
@@ -90,6 +91,7 @@ const ledgerSchema: z.ZodType<Ledger> = z.object({
     && data.users.every(u => u.householdId === data.household.id)
     && [...data.incomes, ...data.fixed, ...data.payments, ...data.annual].every(r => accounts.has(r.accountId))
     && data.fixed.every(item => !item.cardPaymentId || payments.get(item.cardPaymentId)?.kind === 'card')
+    && data.fixed.every(item => !item.cashPaymentId || !item.cardPaymentId && payments.get(item.cashPaymentId)?.kind === 'cash')
     && data.transactions.every(t => payments.has(t.paymentId) && t.items.every(i => categories.has(i.categoryId)))
     && data.transfers.every(t => accounts.has(t.from) && accounts.has(t.to))
     && data.annualActuals.every(a => annualIds.has(a.planId))
@@ -143,6 +145,8 @@ interface Store {
   startCloud(owner: string, row: { ledger: unknown; revision: number } | null): void
   stopCloud(): void
   retryCloud(): void
+  syncConflicts: SyncConflict[]
+  resolveCloud(choices: Record<string, 'local' | 'remote'>): void
 }
 
 export function existingDeviceLedger(): Ledger | null {
@@ -157,58 +161,93 @@ export const useLedger = create<Store>((set, get) => {
   }
   let ledger = initial?.ledger ?? starter()
   let revision = initial?.revision ?? null
-  let cloud: { key: string; revision: number; pending: Ledger | null } | null = null
+  let cloud: { key: string; revision: number; pending: Ledger | null; base: Ledger | undefined } | null = null
+  let resolution: { base: Ledger | undefined; local: Ledger; remote: Ledger; revision: number } | null = null
+  const persist = (active: NonNullable<typeof cloud>) => localStorage.setItem(active.key, JSON.stringify({ revision: active.revision, ledger: active.pending, base: active.base }))
   async function flush() {
     const active = cloud
-    if (!active?.pending || get().cloudStatus === 'saving' || get().cloudStatus === 'conflict') return
+    if (!active?.pending || get().cloudStatus === 'saving') return
     set({ cloudStatus: 'saving', error: '' })
     try {
-      const next = await pushLedger(active.revision, active.pending)
-      if (cloud !== active) return
-      if (next === null) {
-        set({ cloudStatus: 'conflict', error: '別の端末で更新されました。この端末の変更は未送信です。設定からJSONに保存してから、別の端末の内容を確認してください。' })
-        return
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const latest = await pullLedger()
+        if (cloud !== active) return
+        const remote = latest ? ledgerSchema.parse(latest.ledger) : null
+        const revision = latest?.revision ?? 0
+        if (remote && sameLedger(active.pending, remote)) {
+          active.base=remote; active.revision=revision; active.pending=null; ledger=remote
+          localStorage.removeItem(active.key); resolution=null
+          set({ ledger, cloudStatus:'ready',error:'',syncConflicts:[] }); return
+        }
+        if (revision !== active.revision) {
+          if (!remote) throw new Error('クラウドの家計を確認できません。')
+          const merged=mergeLedgers(active.base,active.pending!,remote)
+          if(merged.conflicts.length){
+            resolution={base:active.base,local:active.pending!,remote,revision}
+            set({cloudStatus:'conflict',syncConflicts:merged.conflicts,error:''});return
+          }
+          active.pending=ledgerSchema.parse(merged.ledger);active.base=remote;active.revision=revision;ledger=active.pending
+          persist(active);set({ledger})
+        }
+        const sent=active.pending!
+        const next=await pushLedger(active.revision,sent)
+        if(cloud!==active)return
+        if(next===null)continue
+        active.revision=next;active.base=sent;active.pending=null;resolution=null
+        localStorage.removeItem(active.key);set({cloudStatus:'ready',error:'',syncConflicts:[]});return
       }
-      active.revision = next
-      active.pending = null
-      localStorage.removeItem(active.key)
-      set({ cloudStatus: 'ready' })
+      throw new Error('更新が続いています。少し待って再試行してください。')
     } catch {
-      if (cloud === active) set({ cloudStatus: 'error', error: 'クラウドに未保存です。通信を確認して再送してください。入力はこの端末に一時保管しています。' })
+      if(cloud===active)set({cloudStatus:'error',error:'通信を確認して再試行してください。未保存の入力はこの端末で保護しています。'})
     }
   }
+
   return {
     ledger,
     error: readError,
+    syncConflicts: [],
     cloudStatus: 'local',
     report: error => set({ error }),
     startCloud(owner, row) {
       const key = 'household-pwa:pending:' + owner
       const raw = localStorage.getItem(key)
-      const pending = raw ? z.object({ revision: z.int().nonnegative(), ledger: ledgerSchema }).parse(JSON.parse(raw)) : null
+      const pending = raw ? z.object({ revision: z.int().nonnegative(), ledger: ledgerSchema, base: ledgerSchema.optional() }).parse(JSON.parse(raw)) : null
       const remoteRevision = row?.revision ?? 0
       const base = row ? ledgerSchema.parse(row.ledger) : starter()
-      cloud = { key, revision: remoteRevision, pending: pending?.ledger ?? null }
-      ledger = pending?.ledger ?? base
-      const conflict = pending !== null && pending.revision !== remoteRevision
-      set({ ledger, cloudStatus: conflict ? 'conflict' : pending ? 'error' : 'ready',
-        error: conflict ? '未送信の変更とクラウドの内容が異なります。設定から未送信のデータをJSONに保存してください。' : '' })
+      const alreadySaved = pending && sameLedger(pending.ledger,base)
+      cloud = { key, revision: pending && !alreadySaved ? pending.revision : remoteRevision, pending: alreadySaved ? null : pending?.ledger ?? null,
+        base: pending && !alreadySaved ? pending.base ?? (pending.revision === remoteRevision ? base : undefined) : base }
+      ledger = alreadySaved ? base : pending?.ledger ?? base
+      resolution=null
+      if(alreadySaved)localStorage.removeItem(key)
+      set({ ledger, cloudStatus: cloud.pending ? 'error' : 'ready', error:'',syncConflicts:[] })
+      if(cloud.pending)void flush()
     },
     stopCloud() {
       cloud = null
       ledger = starter()
-      set({ ledger, cloudStatus: 'local', error: '' })
+      set({ ledger, cloudStatus: 'local', error: '', syncConflicts: [] })
     },
     retryCloud() { void flush() },
+    resolveCloud(choices) {
+      if(!cloud||!resolution)return
+      const merged=mergeLedgers(resolution.base,resolution.local,resolution.remote,choices)
+      if(merged.conflicts.length){set({error:'すべての項目で使う内容を選んでください。'});return}
+      const next=ledgerSchema.safeParse(merged.ledger)
+      if(!next.success){set({error:'組み合わせた内容を保存できません。選択内容を確認してください。'});return}
+      cloud.pending=next.data;cloud.base=resolution.remote;cloud.revision=resolution.revision;ledger=next.data
+      persist(cloud);resolution=null;set({ledger,cloudStatus:'error',error:'',syncConflicts:[]});void flush()
+    },
     update(action) {
       try {
         if (cloudEnabled && !cloud) throw new Error('家計を読み込み直してください。')
         if (cloud && get().cloudStatus !== 'ready') throw new Error('先に未送信の変更を確認してください。')
         if (readError) throw new Error(readError)
-        const next = action(ledger)
+        const next = ledgerSchema.parse(action(ledger))
+        if(sameLedger(next,ledger))return true
         if (cloud) {
           if (!ledgerSchema.safeParse(next).success) throw new Error('日付・金額・設定を確認してください。')
-          localStorage.setItem(cloud.key, JSON.stringify({ revision: cloud.revision, ledger: next }))
+          localStorage.setItem(cloud.key, JSON.stringify({ revision: cloud.revision, ledger: next, base: cloud.base }))
           cloud.pending = next
           ledger = next
           set({ ledger })

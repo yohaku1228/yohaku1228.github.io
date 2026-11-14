@@ -26,13 +26,13 @@ const tabs = [
   { id: 'records', name: '記録', icon: PencilLine },
   { id: 'more', name: '設定', icon: Settings2 },
 ] as const
-type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget'  | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme' | 'stores' | 'categories'
+type View = typeof tabs[number]['id'] | 'planning' | 'fixed' | 'budget'  | 'dinner' | 'accounts' | 'analysis' | 'settings' | 'theme' | 'stores' | 'categories' | 'fixed-settings' | 'variable-settings'
 const budgetSections = [
   { id: 'planning', label: '収入' }, { id: 'fixed', label: '固定費' }, { id: 'budget', label: '変動費予算' },
 ] as const
 const titles: Record<View, string> = {
   home: '今月の家計', planning: '予算', records: '支出の記録・履歴', fixed: '固定費', budget: '変動費予算', add: '支出を追加',
-  dinner: '献立', more: '設定', accounts: '口座と振込', analysis: '家計の分析', settings: '家計の基本設定', theme: 'テーマ', stores: '店舗', categories: '支出項目',
+  dinner: '献立', more: '設定', accounts: '口座と振込', analysis: '家計の分析', settings: '家計の基本設定', theme: 'テーマ', stores: '店舗', categories: '支出項目', 'fixed-settings': '固定費の追加・編集', 'variable-settings': '変動費の追加・編集',
 }
 
 function Home({ data, month, go, save, editorSection, closeEditor }: {
@@ -133,6 +133,8 @@ function App() {
         month={month} save={save} editing={editing} setEditing={setEditing} setMonth={setMonth} />}
       {view === 'dinner' && <DinnerCalendar key={month} data={data} month={month} save={save} />}
       {view === 'accounts' && <Accounts key={accountMode} data={data} month={month} save={save} mode={accountMode} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />}
+      {view === 'fixed-settings' && <Planning key={month} data={data} month={month} save={save} section="fixed" openBudget={() => go('variable-settings')} />}
+      {view === 'variable-settings' && <div className="stack"><Settings data={data} save={save} section="categories" /><Planning key={month} data={data} month={month} save={save} section="budget" /></div>}
       {view === 'analysis' && <Analysis data={data} month={month} />}
       {view === 'stores' && <StoreSettings data={data} save={save} />}
       {view === 'categories' && <Settings data={data} save={save} section="categories" />}
@@ -142,12 +144,13 @@ function App() {
         {[
           { title: '引落・口座', items: [
             { icon: ArrowLeftRight, label: accountTitles.payments, detail: '今月の支払い合計・支払未確認額', open: () => openAccount('payments') },
-            { icon: CreditCard, label: accountTitles.setup, detail: 'カード・固定費の振り分け', open: () => openAccount('setup') },
+            { icon: CreditCard, label: 'カード・引落口座', detail: '楽天・イオンなどの引落口座を変更', open: () => openAccount('setup') },
             { icon: Landmark, label: accountTitles.year, detail: 'ボーナス・児童手当・積立', open: () => openAccount('year') },
           ] },
           { title: '支出の設定', items: [
             { icon: House, label: '店舗', detail: '店舗の追加・名前の変更・候補から削除', open: () => go('stores') },
-            { icon: PencilLine, label: '支出項目', detail: '食費・お小遣いなどの名前・色', open: () => go('categories') },
+            { icon: CreditCard, label: '固定費', detail: '項目・月額・支払方法の追加と変更', open: () => go('fixed-settings') },
+            { icon: PencilLine, label: '変動費', detail: '項目名・追加・予算の変更', open: () => go('variable-settings') },
           ] },
 
           { title: 'その他', items: [

@@ -82,9 +82,6 @@ export function Accounts({ data, month, save, mode, openIncome, openFixed, openR
             const record: PaymentMethod = { id: card?.id ?? uid(), kind: 'card', name: str(fields, 'name'), accountId: str(fields, 'account'),
               closingDay: num(fields, 'closing'), debitDay: num(fields, 'debit'), debitLag: num(fields, 'lag') }
             if (save(old => {
-              if (card && card.accountId !== record.accountId && old.transactions.some(t => t.paymentId === card.id)) {
-                throw new Error('明細のあるカードは口座を変更できません。新しい支払方法を追加してください。')
-              }
               return { ...old, payments: [...old.payments.filter(p => p.id !== record.id), record] }
             })) editCard(null)
           })}>
@@ -102,17 +99,19 @@ export function Accounts({ data, month, save, mode, openIncome, openFixed, openR
         </Panel>
         <Panel title="固定費の引落口座" description="銀行・現金で直接払うか、カードを通して払うかを選びます。カード払いはそのカードの引落口座に集計します。">
           {data.fixed.length ? <div className="fields">{data.fixed.map(item => <Field key={item.id} label={item.name + 'の支払方法'}>
-            <select value={item.cardPaymentId ? 'card:' + item.cardPaymentId : 'account:' + item.accountId} onChange={event => {
+            <select value={item.cardPaymentId ? 'card:' + item.cardPaymentId : item.cashPaymentId ? 'cash:' + item.cashPaymentId : 'account:' + item.accountId} onChange={event => {
               const value = event.target.value
               const isCard = value.startsWith('card:')
-              const id = value.slice(isCard ? 'card:'.length : 'account:'.length)
+              const isCash = value.startsWith('cash:')
+              const id = value.slice(value.indexOf(':') + 1)
               save(old => {
-                const payment = isCard ? old.payments.find(p => p.id === id && p.kind === 'card') : undefined
+                const payment = isCard || isCash ? old.payments.find(p => p.id === id && p.kind === (isCard ? 'card' : 'cash')) : undefined
                 return { ...old, fixed: old.fixed.map(row => row.id === item.id
-                  ? { ...row, accountId: payment?.accountId ?? id, cardPaymentId: payment?.id } : row) }
+                  ? { ...row, accountId: payment?.accountId ?? id, cardPaymentId: isCard ? payment?.id : undefined, cashPaymentId: isCash ? payment?.id : undefined } : row) }
               })
             }}>
               <optgroup label="口座・現金">{data.accounts.map(a => <option key={a.id} value={'account:' + a.id}>{a.name}</option>)}</optgroup>
+              <optgroup label="現金払い">{data.payments.filter(p => p.kind === 'cash').map(p => <option key={p.id} value={'cash:' + p.id}>現金</option>)}</optgroup>
               <optgroup label="カード払い">{data.payments.filter(p => p.kind === 'card').map(p => <option key={p.id} value={'card:' + p.id}>{p.name} → {data.accounts.find(a => a.id === p.accountId)?.name}</option>)}</optgroup>
             </select>
           </Field>)}</div> : <p className="empty">下の「予算」から「固定費」を開くと、項目を追加できます。</p>}

@@ -6,6 +6,14 @@ import { monthly } from './finance.ts'
 import type { Transaction } from './model.ts'
 
 const buy=(id:string,date:string,paymentId:string,amount:number,extra:Partial<Transaction>={}):Transaction=>({id,date,paymentId,merchant:id,memo:'',personal:false,items:[{id:'item-'+id,name:'買い物',categoryId:'food',quantity:1,amount,discount:0}],...extra})
+test('fixed cash payment is assigned to cash even when its legacy source account is a bank',()=>{
+ const d=starter();d.accounts[0].name='東北労働金庫'
+ d.fixed=[{id:'f',name:'現金で払う固定費',amount:1500,accountId:'main',cashPaymentId:'cash',dueDay:null,startMonth:'2026-11',endMonth:null,kind:'expense'}]
+ const result=monthlyAllocation(d,'2026-11')
+ assert.equal(result.groups.find(g=>g.id==='cash')?.amount,1500)
+ assert.equal(result.groups.find(g=>g.id==='main')?.amount,0)
+ assert.equal(result.expense,1500)
+})
 test('unused placeholder account is hidden; real banks and linked nonzero amounts stay visible',()=>{
  const d=starter()
  assert.equal(monthlyAllocation(d,'2026-11').groups.some(g=>g.name==='メイン口座'),false)

@@ -11,7 +11,7 @@ export function monthlyAllocation(data: Ledger, month: string) {
     if (transactions.some(row => row.fixedExpenseId === item.id)) continue
     const card = cards.find(card => card.id === item.cardPaymentId)
     if (card) cardAmounts.get(card.id)!.amount += item.amount
-    else rows.push({ id: 'fixed:' + item.id, name: item.name, accountId: cashAccount(item.accountId), amount: item.amount, kind: 'fixed' })
+    else rows.push({ id: 'fixed:' + item.id, name: item.name, accountId: item.cashPaymentId ? 'cash' : cashAccount(item.accountId), amount: item.amount, kind: 'fixed' })
   }
   for (const transaction of transactions) {
     const payment = data.payments.find(row => row.id === transaction.paymentId)

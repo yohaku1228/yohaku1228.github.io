@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { cloudEnabled, currentOwner, login, logout, pullLedger } from './cloud'
-import { backup, download, existingDeviceLedger, useLedger } from './storage'
+import { existingDeviceLedger, useLedger } from './storage'
+import { CloudConflict } from './cloud-conflict'
 import { Field, form, Panel } from './ui'
 
 export function CloudGate({ children }: { children: ReactNode }) {
@@ -13,6 +14,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
   const save = useLedger(state => state.update)
   const [canImport, setCanImport] = useState(false)
   const [version, reload] = useState(0)
+  const [showConflict, setShowConflict] = useState(false)
   useEffect(() => {
     if (status === 'saving') setCanImport(false)
   }, [status])
@@ -48,14 +50,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
   if (!cloudEnabled) return children
   if (owner && loaded === owner) return <>
     <aside className="cloud-bar">
-      <span role="status">{status === 'saving' ? 'クラウドへ保存中…' : status === 'ready' ? 'クラウド保存' : '未送信の変更あり'}</span>
+      <span role="status">{status === 'saving' ? 'クラウドへ保存中…' : status === 'ready' ? 'クラウド保存' : status === 'conflict' ? '変更内容の確認が必要' : '再送を待っています'}</span>
       {status === 'error' && <button className="quiet" onClick={retry}>保存を再試行</button>}
-      {status === 'conflict' && <button className="quiet" onClick={() => {
-        if (!window.confirm('未送信の変更をJSONに書き出し、クラウドの最新版を開き直しますか？')) return
-        download('MoneyFlow Manager-未送信の変更.json', JSON.stringify(backup(useLedger.getState().ledger)), 'application/json')
-        localStorage.removeItem('household-pwa:pending:' + owner)
-        reload(v => v + 1)
-      }}>変更を保存して最新版を開く</button>}
+      {status === 'conflict' && <button className="quiet" onClick={() => setShowConflict(v => !v)}>保存内容を確認</button>}
       {canImport && <button className="quiet" disabled={status !== 'ready'} onClick={() => {
         const device = existingDeviceLedger()
         if (device && window.confirm('この端末の家計をクラウドに取り込みますか？')) {
@@ -67,6 +64,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
         catch { useLedger.getState().report('ログアウトできませんでした。') }
       }}>ログアウト</button>
     </aside>
+    {status === 'conflict' && showConflict && <CloudConflict />}
     {children}
   </>
 

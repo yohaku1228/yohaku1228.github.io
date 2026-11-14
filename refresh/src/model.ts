@@ -15,6 +15,7 @@ export interface WeeklyBudget { month: Month; start: Day; categoryId: Id; amount
 export interface FixedExpense {
   id: Id; name: string; amount: Yen; accountId: Id; dueDay: number | null
   cardPaymentId?: Id
+  cashPaymentId?: Id
   startMonth: Month; endMonth: Month | null; kind: 'expense' | 'asset'
 }
 export interface TransactionItem { id: Id; name: string; categoryId: Id; quantity: number; amount: Yen; discount: Yen }
