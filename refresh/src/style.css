@@ -288,3 +288,18 @@ summary { cursor: pointer; min-height: 44px; font-size: 14px; padding: 10px 0; c
   .flyer-dialog { inset: auto 0 0; margin: 0; height: calc(100dvh - max(10px, env(safe-area-inset-top))); border-radius: 22px 22px 0 0; }
   .flyer-header, .flyer-scroll, .flyer-footer { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 }
+
+.flyer-scroll > .flyer-chips { position: sticky; top: -16px; z-index: 2; padding-top: 12px; background: #fff; }
+.flyer-content { border-top: 1px solid var(--border); padding-top: 22px; margin-top: 24px; scroll-margin-top: 64px; }
+.flyer-store-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.flyer-store-heading h3 { margin: 0; }
+.flyer-store-heading span { color: var(--muted); font-size: 12px; flex: none; }
+.flyer-paper { margin: 0 0 18px; }
+.flyer-paper figcaption { font-size: 12px; line-height: 1.7; color: var(--muted); margin-bottom: 7px; }
+.flyer-zoom { display: flex; justify-content: end; align-items: center; gap: 6px; margin-bottom: 7px; }
+.flyer-zoom button { min-height: 44px; min-width: 44px; padding: 8px 12px; font-size: 13px; }
+.flyer-paper-scroll { width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.flyer-paper-size { min-width: 100%; }
+.flyer-paper-size img, .flyer-paper-size svg { display: block; width: 100%; height: auto; max-width: none; object-fit: contain; }
+.flyer-paper-size a { display: block; }
+@media (max-width: 350px) { .flyer-store-heading { flex-direction: column; gap: 2px; } }
