@@ -11,6 +11,7 @@ export const flyerStores: FlyerStore[] = [
   { id: 'yamazawa', name: 'ヤマザワ 天童西店', area: '南小畑', category: 'supermarket', officialUrl: 'https://yamazawa.co.jp/shop/070.html', flyerPortalUrl: tokubai('ヤマザワ', 878), portalName: 'トクバイ' },
   { id: 'york', name: 'ヨークベニマル ららパーク天童店', area: '南町', category: 'supermarket', officialUrl: 'https://yorkbenimaru.com/store/details/raraparktendo/', flyerPortalUrl: tokubai('ヨークベニマル', 9631), portalName: 'トクバイ' },
   { id: 'ohban', name: 'おーばん 南天童店', area: '東芳賀', category: 'supermarket', officialUrl: 'https://www.oh-ban.com/flyer_store/minamitendo/', flyerPortalUrl: tokubai('おーばん', 931), portalName: 'トクバイ' },
+  { id: 'bikkuri', name: '週末びっくり市 天童店', area: '老野森', category: 'supermarket', officialUrl: 'https://nogawa-bikkuriichi.com/shop', flyerPortalUrl: tokubai('週末びっくり市', 172436), portalName: 'トクバイ' },
   { id: 'gyomu', name: '業務スーパー 天童店', area: '南町', category: 'supermarket', officialUrl: 'https://www.gyomusuper.jp/shop/detail.php?sh_id=1359', flyerPortalUrl: tokubai('業務スーパー', 263430), portalName: 'トクバイ' },
   { id: 'aoki', name: 'クスリのアオキ 中里店', area: '中里', category: 'supermarket', officialUrl: 'https://kusuri-aoki-shop-info.com/result?storeCode=693', flyerPortalUrl: 'https://www.shufoo.net/pntweb/shopDetail/857833/', portalName: 'Shufoo!' },
   { id: 'tsuruha', name: 'ツルハドラッグ 天童芳賀店', area: '東芳賀', category: 'drug', officialUrl: 'https://shop.tsuruha-g.com/0918', flyerPortalUrl: 'https://www.shufoo.net/pntweb/shopDetail/890203/', portalName: 'Shufoo!' },

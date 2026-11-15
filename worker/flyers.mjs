@@ -197,9 +197,14 @@ export async function getFlyers(fetcher = fetch) {
       } catch { /* Keep official and portal links even when both extraction routes fail. */ }
     }
     if (!pages.length && found.previewImageUrl) pages = [{ imageUrl: found.previewImageUrl }]
-    // A successfully parsed URL alone is insufficient: verify an actual image response.
-    const checks = await Promise.all(pages.map(page => verifiedPage(page, fetcher)))
-    pages = pages.filter((_, index) => checks[index])
+    // Verify an actual sheet, not just a parsed URL. The viewer validates every
+    // sheet on load; probing every image here exhausts the free Worker request
+    // budget as stores and catalogs grow, silently losing otherwise valid sheets.
+    let firstUsable = -1
+    for (let index = 0; index < pages.length; index++) {
+      if (await verifiedPage(pages[index], fetcher)) { firstUsable = index; break }
+    }
+    pages = firstUsable < 0 ? [] : pages.slice(firstUsable)
     return { ...fallback, extractedPdfUrl: found.extractedPdfUrl ?? null,
       previewImageUrl: pages[0]?.imageUrl ?? null, pages, verified: pages.length > 0,
       sourceUrl, previewKind: 'flyer', status: pages.length ? 'ok' : 'unavailable' }
@@ -210,7 +215,7 @@ export async function getFlyers(fetcher = fetch) {
 export async function flyersResponse(request, ctx, cache = globalThis.caches?.default, fetcher = fetch) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Max-Age': '86400' } })
   if (request.method !== 'GET') return Response.json({ error: 'GETで取得してください。' }, { status: 405, headers: { ...headers, Allow: 'GET, OPTIONS' } })
-  const key = new Request(new URL('/api/flyers?schema=5', request.url))
+  const key = new Request(new URL('/api/flyers?schema=7', request.url))
   const cached = cache && await cache.match(key)
   if (cached) return cached
   const response = Response.json(await getFlyers(fetcher), { headers: { ...headers, 'Cache-Control': 'public, max-age=3600' } })

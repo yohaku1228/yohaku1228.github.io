@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { extractFlyer, getFlyers, flyersResponse, imagePages, shufooSheets, tiledPages } from './flyers.mjs'
 import worker from './index.mjs'
+import { flyerStores } from '../refresh/src/flyer-stores.ts'
 
 test('extracts flyer PDFs and images, resolves relative URLs and ignores unrelated documents', () => {
   const result = extractFlyer(`<a href="/company/news.pdf">お知らせ</a>
@@ -22,7 +23,7 @@ test('only follows official linked Tokubai leaflet widgets', () => {
   assert.equal(extractFlyer('<iframe src="https://unknown.test/878/leaflet_widget"></iframe>', 'https://store.test').widget, null)
 })
 
-test('nine stores retain fallbacks on blocked, non-HTML and failed upstream responses', async () => {
+test('all stores retain fallbacks on blocked, non-HTML and failed upstream responses', async () => {
   const result = await getFlyers(async (url, options) => {
     assert.deepEqual(options.cf, { cacheTtl: 3600, cacheEverything: true })
     if (url === 'https://image.test/leaflet.jpg') return new Response('image bytes', { headers: { 'Content-Type': 'image/jpeg' } })
@@ -32,8 +33,8 @@ test('nine stores retain fallbacks on blocked, non-HTML and failed upstream resp
     if (url.includes('tsuruha')) return new Response('not html')
     throw Error('Network unavailable')
   })
-  assert.equal(result.stores.length, 9)
-  assert.equal(new Set(result.stores.map(s => s.id)).size, 9)
+  assert.equal(result.stores.length, flyerStores.length)
+  assert.equal(new Set(result.stores.map(s => s.id)).size, flyerStores.length)
   assert.equal(result.stores.find(s => s.id === 'yamazawa').previewImageUrl, 'https://image.test/leaflet.jpg')
   for (const store of result.stores) {
     assert.ok(store.officialUrl.startsWith('https://'))
@@ -53,7 +54,7 @@ test('GET is edge cached for an hour, CORS preflight does not fetch and invalid 
   const first = await flyersResponse(request, null, cache, fetcher)
   assert.equal(first.headers.get('Cache-Control'), 'public, max-age=3600')
   assert.equal(first.headers.get('Access-Control-Allow-Origin'), '*')
-  assert.equal((await first.json()).stores.length, 9)
+  assert.equal((await first.json()).stores.length, flyerStores.length)
   const firstCalls = calls
   assert.ok(firstCalls >= 9)
   await flyersResponse(request, null, cache, fetcher)
