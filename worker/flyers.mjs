@@ -69,7 +69,7 @@ async function htmlAt(url, fetcher, xml = false) {
 
 const xmlValue = (text, name) => decode(text.match(new RegExp('<' + name + '>([\\s\\S]*?)</' + name + '>'))?.[1] ?? '')
 
-export function imagePages(html, base) {
+export function imagePages(html, base, limit = 4) {
   const host = new URL(base).hostname
   if (host === 'tokubai.co.jp') {
     const id = new URL(base).pathname.match(/\/(\d+)(?:\/|$)/)?.[1]
@@ -102,7 +102,7 @@ export function imagePages(html, base) {
     .filter(url => url && new URL(url).hostname === 'image.tokubai.co.jp' && url.includes('/bargain_office_leaflets/'))
     // Remove crop instructions as well as thumbnail size, so the entire paper is visible.
     .map(url => url.replace(/(\/bargain_office_leaflets\/)w=[^/]+\//, '$1w=1600/')))]
-    .slice(0, 4).map(imageUrl => ({ imageUrl }))
+    .slice(0, limit).map(imageUrl => ({ imageUrl }))
 }
 
 export function shufooSheets(xml, now = Date.now()) {
@@ -160,6 +160,15 @@ export async function getFlyers(fetcher = fetch) {
       const page = await htmlAt(store.officialUrl, fetcher)
       found = extractFlyer(page.html, page.url); sourceUrl = page.url
       pages = imagePages(page.html, page.url)
+      // York's official widget is limited to two sheets. Read the complete store
+      // catalog instead, keeping the widget as a fallback if that request fails.
+      if (store.id === 'york') {
+        try {
+          const catalog = await htmlAt(store.flyerPortalUrl, fetcher)
+          const complete = imagePages(catalog.html, catalog.url, Infinity)
+          if (complete.length) { pages = complete; sourceUrl = catalog.url }
+        } catch { /* Continue with the official widget below. */ }
+      }
       if (!pages.length && found.widget) {
         try {
           const widget = await htmlAt(found.widget, fetcher)
@@ -183,7 +192,7 @@ export async function getFlyers(fetcher = fetch) {
         else if (store.portalName === 'Shufoo!') { pages = await shufooPages(store, fetcher); sourceUrl = store.flyerPortalUrl }
         else if (!store.flyerPortalUrl.includes('/search?')) {
           const portal = await htmlAt(store.flyerPortalUrl, fetcher)
-          pages = imagePages(portal.html, portal.url); sourceUrl = portal.url
+          pages = imagePages(portal.html, portal.url, store.id === 'york' ? Infinity : 4); sourceUrl = portal.url
         }
       } catch { /* Keep official and portal links even when both extraction routes fail. */ }
     }
@@ -201,7 +210,7 @@ export async function getFlyers(fetcher = fetch) {
 export async function flyersResponse(request, ctx, cache = globalThis.caches?.default, fetcher = fetch) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Max-Age': '86400' } })
   if (request.method !== 'GET') return Response.json({ error: 'GETで取得してください。' }, { status: 405, headers: { ...headers, Allow: 'GET, OPTIONS' } })
-  const key = new Request(new URL('/api/flyers?schema=4', request.url))
+  const key = new Request(new URL('/api/flyers?schema=5', request.url))
   const cached = cache && await cache.match(key)
   if (cached) return cached
   const response = Response.json(await getFlyers(fetcher), { headers: { ...headers, 'Cache-Control': 'public, max-age=3600' } })

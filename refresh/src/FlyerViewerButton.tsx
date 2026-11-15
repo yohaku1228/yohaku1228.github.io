@@ -9,7 +9,7 @@ let pending: Promise<FlyerData> | null = null
 function loadFlyers() {
   if (cached && cached.expires > Date.now()) return Promise.resolve(cached.data)
   if (pending) return pending
-  pending = fetch('/api/flyers?v=4', { credentials: 'omit', signal: AbortSignal.timeout(35000) })
+  pending = fetch('/api/flyers?v=5', { credentials: 'omit', signal: AbortSignal.timeout(35000) })
     .then(async response => {
       if (!response.ok) throw Error('取得できませんでした。公式サイトから確認できます。')
       const data: FlyerData = await response.json()
@@ -66,7 +66,7 @@ function StoreFlyers({ store, onResult }: { store: Flyer; onResult: (id: string,
     else if (Object.keys(results.current).length === pages.length) onResult(store.id, false)
   }
   return <section aria-label={store.name + 'のチラシ'} className="flyer-content" data-store={store.id}>
-    <header className="flyer-store-heading"><h3>{store.name}</h3><span>{store.area}</span></header>
+    <header className="flyer-store-heading"><h3>{store.name}</h3><span>{store.area}{pages.length > 0 && `・${pages.length}枚`}</span></header>
     {pages.map((page, index) => <Paper key={page.imageUrl ?? index} page={page} name={store.name} onResult={ready => pageResult(index, ready)} />)}
     {!pages.length && <p className="flyer-empty">掲載画像を取得できませんでした。店舗サイトから確認できます。</p>}
     <div className="flyer-actions">

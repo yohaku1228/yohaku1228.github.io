@@ -111,3 +111,22 @@ test('independent official flyer feed still works when the Musashi store page fa
   assert.equal(musashi.verified, true)
   assert.equal(musashi.pages[0].imageUrl, 'https://image.test/musashi.webp')
 })
+
+test('York reads every own-store sheet from the full catalog rather than the two-sheet widget', async () => {
+  const html = Array.from({ length: 8 }, (_, i) => `<a href="/chain/9631/leaflets/${i}"><img data-src="https://image.tokubai.co.jp/images/bargain_office_leaflets/w=100,h=137,c=true/${i}.jpg"></a>`).join('') +
+    '<a href="/other/123/leaflets/999"><img src="https://image.tokubai.co.jp/images/bargain_office_leaflets/w=100/999.jpg"></a>'
+  let widgetFetched = false
+  const data = await getFlyers(async url => {
+    if (url.includes('yorkbenimaru.com')) return new Response('<iframe src="https://widgets.tokubai.co.jp/9631/leaflet_widget?count=2"></iframe>', { headers: { 'Content-Type': 'text/html' } })
+    if (new URL(url).hostname === 'tokubai.co.jp' && url.endsWith('/9631')) return new Response(html, { headers: { 'Content-Type': 'text/html' } })
+    if (url.includes('widgets.tokubai.co.jp/9631')) widgetFetched = true
+    if (new URL(url).hostname === 'image.tokubai.co.jp') return new Response('image', { headers: { 'Content-Type': 'image/jpeg' } })
+    return new Response('unavailable', { status: 503 })
+  })
+  const york = data.stores.find(store => store.id === 'york')
+  assert.equal(york.pages.length, 8)
+  assert.equal(new Set(york.pages.map(page => page.imageUrl)).size, 8)
+  assert.equal(york.verified, true)
+  assert.equal(widgetFetched, false)
+  assert.ok(york.pages.every(page => !page.imageUrl.includes('999.jpg')))
+})
