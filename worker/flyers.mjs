@@ -201,7 +201,7 @@ export async function getFlyers(fetcher = fetch) {
 export async function flyersResponse(request, ctx, cache = globalThis.caches?.default, fetcher = fetch) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Max-Age': '86400' } })
   if (request.method !== 'GET') return Response.json({ error: 'GETで取得してください。' }, { status: 405, headers: { ...headers, Allow: 'GET, OPTIONS' } })
-  const key = new Request(new URL('/api/flyers?schema=3', request.url))
+  const key = new Request(new URL('/api/flyers?schema=4', request.url))
   const cached = cache && await cache.match(key)
   if (cached) return cached
   const response = Response.json(await getFlyers(fetcher), { headers: { ...headers, 'Cache-Control': 'public, max-age=3600' } })

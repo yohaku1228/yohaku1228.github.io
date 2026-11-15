@@ -9,7 +9,7 @@ let pending: Promise<FlyerData> | null = null
 function loadFlyers() {
   if (cached && cached.expires > Date.now()) return Promise.resolve(cached.data)
   if (pending) return pending
-  pending = fetch('/api/flyers?v=3', { credentials: 'omit', signal: AbortSignal.timeout(35000) })
+  pending = fetch('/api/flyers?v=4', { credentials: 'omit', signal: AbortSignal.timeout(35000) })
     .then(async response => {
       if (!response.ok) throw Error('取得できませんでした。公式サイトから確認できます。')
       const data: FlyerData = await response.json()
