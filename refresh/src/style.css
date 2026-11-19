@@ -302,4 +302,5 @@ summary { cursor: pointer; min-height: 44px; font-size: 14px; padding: 10px 0; c
 .flyer-paper-size { min-width: 100%; }
 .flyer-paper-size img, .flyer-paper-size svg { display: block; width: 100%; height: auto; max-width: none; object-fit: contain; }
 .flyer-paper-size a { display: block; }
+.flyer-refresh { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; margin-top: 8px; }
 @media (max-width: 350px) { .flyer-store-heading { flex-direction: column; gap: 2px; } }

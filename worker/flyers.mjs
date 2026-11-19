@@ -33,7 +33,7 @@ export function extractFlyer(html, base) {
     const a = attrs(match[0])
     const value = a['data-src'] ?? a.src ?? (a.property === 'og:image' ? a.content : null)
     const url = value && safeUrl(value, base)
-    if (url && flyerHint.test([a.alt, url].join(' ')) && !/logo|icon|banner|bnr|button|btn|header|footer|side_|\/common\/|other_image|map|\.svg(?:[?#]|$)/i.test(url)) {
+    if (url && flyerHint.test([a.alt, url].join(' ')) && !/logo|icon|banner|bnr|button|btn|header|footer|side_|shop_flyer|\/themes\/|\/common\/|other_image|map|\.svg(?:[?#]|$)/i.test(url)) {
       // Official Tokubai widgets return thumbnails; use the same image's readable CDN size.
       previewImageUrl = new URL(url).hostname === 'image.tokubai.co.jp'
         ? url.replace(/\/w=\d+(?:,h=\d+)?\//, '/w=1200/') : url
@@ -44,13 +44,20 @@ export function extractFlyer(html, base) {
     .map(a => safeUrl(a.src ?? a.href, base)).find(value => {
       if (!value) return false
       const url = new URL(value)
-      return url.hostname === 'widgets.tokubai.co.jp' && /^\/\d+\/leaflet_widget$/.test(url.pathname)
+      return url.hostname === 'widgets.tokubai.co.jp' && /^\/\d+\/(?:leaflet_widget|widget)$/.test(url.pathname)
     })
-  return { extractedPdfUrl, previewImageUrl, widget: widget ?? null }
+  let leafletWidget = widget ?? null
+  if (widget && new URL(widget).pathname.endsWith('/widget')) {
+    const url = new URL(widget)
+    url.pathname = url.pathname.replace(/\/widget$/, '/leaflet_widget')
+    url.search = '?count=20&type=spweb'
+    leafletWidget = url.href
+  }
+  return { extractedPdfUrl, previewImageUrl, widget: leafletWidget }
 }
 
 async function htmlAt(url, fetcher, xml = false) {
-  const response = await fetcher(url, { signal: AbortSignal.timeout(6500), cf: { cacheTtl: 3600, cacheEverything: true },
+  const response = await fetcher(url, { signal: AbortSignal.timeout(6500), cf: { cacheTtl: 300, cacheEverything: true },
     headers: { Accept: 'text/html,application/xhtml+xml' } })
   if (!response.ok || !new RegExp(xml ? 'xml' : 'text/html').test(response.headers.get('content-type') ?? '')) throw Error('Unavailable')
   const reader = response.body.getReader(), decoder = new TextDecoder()
@@ -174,7 +181,7 @@ export async function getFlyers(fetcher = fetch) {
           const widget = await htmlAt(found.widget, fetcher)
           const next = extractFlyer(widget.html, widget.url)
           found = { ...found, previewImageUrl: next.previewImageUrl }; sourceUrl = widget.url
-          pages = imagePages(widget.html, widget.url)
+          pages = imagePages(widget.html, widget.url, store.id === 'bikkuri' ? Infinity : 4)
         } catch { /* External links remain usable even if a widget is blocked. */ }
       }
       if (!pages.length && store.id === 'musashi') {
@@ -215,14 +222,18 @@ export async function getFlyers(fetcher = fetch) {
 export async function flyersResponse(request, ctx, cache = globalThis.caches?.default, fetcher = fetch) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Max-Age': '86400' } })
   if (request.method !== 'GET') return Response.json({ error: 'GETで取得してください。' }, { status: 405, headers: { ...headers, Allow: 'GET, OPTIONS' } })
-  const key = new Request(new URL('/api/flyers?schema=7', request.url))
-  const cached = cache && await cache.match(key)
+  const refresh = new URL(request.url).searchParams.get('refresh') === '1'
+  const key = new Request(new URL('/api/flyers?schema=8', request.url))
+  const cached = !refresh && cache && await cache.match(key)
   if (cached) return cached
-  const response = Response.json(await getFlyers(fetcher), { headers: { ...headers, 'Cache-Control': 'public, max-age=3600' } })
+  const upstream = refresh ? (url, options) => fetcher(url, { ...options,
+    headers: { ...options?.headers, 'Cache-Control': 'no-cache' }, cf: { ...options?.cf, cacheTtl: 0 } }) : fetcher
+  const response = Response.json(await getFlyers(upstream), { headers: { ...headers, 'Cache-Control': 'public, max-age=300' } })
   if (cache) {
     const write = cache.put(key, response.clone()).catch(() => {})
     if (ctx?.waitUntil) ctx.waitUntil(write)
     else await write
   }
+  if (refresh) response.headers.set('Cache-Control', 'no-store')
   return response
 }

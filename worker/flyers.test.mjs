@@ -25,7 +25,7 @@ test('only follows official linked Tokubai leaflet widgets', () => {
 
 test('all stores retain fallbacks on blocked, non-HTML and failed upstream responses', async () => {
   const result = await getFlyers(async (url, options) => {
-    assert.deepEqual(options.cf, { cacheTtl: 3600, cacheEverything: true })
+    assert.deepEqual(options.cf, { cacheTtl: url === 'https://image.test/leaflet.jpg' ? 3600 : 300, cacheEverything: true })
     if (url === 'https://image.test/leaflet.jpg') return new Response('image bytes', { headers: { 'Content-Type': 'image/jpeg' } })
     if (url.includes('yamazawa')) return new Response('<iframe src="https://widgets.tokubai.co.jp/878/leaflet_widget"></iframe>', { headers: { 'Content-Type': 'text/html' } })
     if (url.includes('widgets.tokubai')) return new Response('<img src="https://image.test/leaflet.jpg">', { headers: { 'Content-Type': 'text/html' } })
@@ -46,13 +46,13 @@ test('all stores retain fallbacks on blocked, non-HTML and failed upstream respo
   }
 })
 
-test('GET is edge cached for an hour, CORS preflight does not fetch and invalid methods are rejected', async () => {
+test('GET is edge cached for five minutes, CORS preflight does not fetch and invalid methods are rejected', async () => {
   let calls = 0, saved = null
   const cache = { match: async () => saved?.clone(), put: async (_, response) => { saved = response } }
   const fetcher = async () => { calls++; return new Response('<p>店舗</p>', { headers: { 'Content-Type': 'text/html' } }) }
   const request = new Request('https://household.test/api/flyers')
   const first = await flyersResponse(request, null, cache, fetcher)
-  assert.equal(first.headers.get('Cache-Control'), 'public, max-age=3600')
+  assert.equal(first.headers.get('Cache-Control'), 'public, max-age=300')
   assert.equal(first.headers.get('Access-Control-Allow-Origin'), '*')
   assert.equal((await first.json()).stores.length, flyerStores.length)
   const firstCalls = calls
@@ -64,6 +64,38 @@ test('GET is edge cached for an hour, CORS preflight does not fetch and invalid 
   assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), '*')
   assert.equal((await flyersResponse(new Request(request.url, { method: 'POST' }), null, cache, fetcher)).status, 405)
   assert.equal(calls, firstCalls)
+})
+
+test('Bikkuri Thursday flyers come from the linked feed even when the normal store page has none', async () => {
+  const result = await getFlyers(async url => {
+    if (url === 'https://nogawa-bikkuriichi.com/shop') return new Response(
+      '<img src="/wp-content/themes/nogawa-bikkuriichi/images/shop_flyer.png" alt="最新のチラシはこちら">' +
+      '<iframe src="https://widgets.tokubai.co.jp/172436/widget?height=250&amp;width=300"></iframe>',
+      { headers: { 'Content-Type': 'text/html' } })
+    if (url === 'https://widgets.tokubai.co.jp/172436/leaflet_widget?count=20&type=spweb') return new Response(
+      '<img src="https://image.tokubai.co.jp/images/bargain_office_leaflets/w=144/9872594.jpg"><img src="https://image.tokubai.co.jp/images/bargain_office_leaflets/w=144/9872595.jpg">',
+      { headers: { 'Content-Type': 'text/html' } })
+    if (url.startsWith('https://image.tokubai.co.jp/')) return new Response('image', { headers: { 'Content-Type': 'image/jpeg' } })
+    return new Response('<p>今日は掲載なし</p>', { headers: { 'Content-Type': 'text/html' } })
+  })
+  const store = result.stores.find(row => row.id === 'bikkuri')
+  assert.equal(store.pages.length, 2)
+  assert.ok(store.pages.every(page => !page.imageUrl.includes('shop_flyer')))
+  assert.ok(store.pages[0].imageUrl.includes('9872594'))
+})
+
+test('explicit refresh bypasses saved response and requests fresh upstream data', async () => {
+  let calls = 0, writes = 0
+  const cache = { match: async () => { throw Error('Refresh must skip cached response') }, put: async () => { writes++ } }
+  const response = await flyersResponse(new Request('https://household.test/api/flyers?refresh=1'), null, cache, async (_, options) => {
+    calls++
+    assert.equal(options.cf.cacheTtl, 0)
+    assert.equal(options.headers['Cache-Control'], 'no-cache')
+    return new Response('<p>店舗</p>', { headers: { 'Content-Type': 'text/html' } })
+  })
+  assert.ok(calls >= flyerStores.length)
+  assert.equal(writes, 1)
+  assert.equal(response.headers.get('Cache-Control'), 'no-store')
 })
 
 test('Tokubai images are uncropped and belong to the requested store, not nearby stores', () => {

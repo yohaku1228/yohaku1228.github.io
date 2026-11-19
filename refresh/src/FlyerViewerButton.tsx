@@ -6,15 +6,15 @@ import { orderFlyers } from './flyer-order'
 
 let cached: { data: FlyerData; expires: number } | null = null
 let pending: Promise<FlyerData> | null = null
-function loadFlyers() {
-  if (cached && cached.expires > Date.now()) return Promise.resolve(cached.data)
+function loadFlyers(refresh = false) {
+  if (!refresh && cached && cached.expires > Date.now()) return Promise.resolve(cached.data)
   if (pending) return pending
-  pending = fetch('/api/flyers?v=7', { credentials: 'omit', signal: AbortSignal.timeout(35000) })
+  pending = fetch('/api/flyers?v=8' + (refresh ? '&refresh=1' : ''), { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(35000) })
     .then(async response => {
       if (!response.ok) throw Error('取得できませんでした。公式サイトから確認できます。')
       const data: FlyerData = await response.json()
       if (!Array.isArray(data.stores) || !data.stores.length || typeof data.fetchedAt !== 'string') throw Error('店舗情報を取得できませんでした。')
-      cached = { data, expires: Date.now() + 3600000 }
+      cached = { data, expires: Date.now() + 300000 }
       return data
     }).finally(() => { pending = null })
   return pending
@@ -89,9 +89,9 @@ export function FlyerViewerButton() {
   const trigger = useRef<HTMLButtonElement>(null)
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
-  async function load() {
+  async function load(refresh = false) {
     setLoading(true); setError('')
-    try { const result = await loadFlyers(); if (alive.current) setData(result) }
+    try { const result = await loadFlyers(refresh); if (alive.current) { setData(result); setDisplayed({}) } }
     catch { if (alive.current) setError('チラシ情報を取得できませんでした。公式サイトは開けます。') }
     finally { if (alive.current) setLoading(false) }
   }
@@ -125,7 +125,8 @@ export function FlyerViewerButton() {
         <div className="flyer-scroll" ref={scroll}>
           <div className="flyer-chips" role="group" aria-label="店舗カテゴリ">{filters.map(filter => <button key={filter.id} aria-pressed={category === filter.id} onClick={() => changeCategory(filter.id)}>{filter.label}{filter.id === 'all' && ` (${stores.length})`}</button>)}</div>
           {loading && <p role="status" className="hint">チラシ情報を確認中… 公式サイトはすぐ開けます。</p>}
-          {error && <div className="flyer-notice" role="status"><p>{error}</p><button className="quiet" onClick={() => void load()} disabled={loading}><RefreshCw size={16} /> 再取得</button></div>}
+          <button className="quiet flyer-refresh" onClick={() => void load(true)} disabled={loading}><RefreshCw size={16} />{loading ? '確認中…' : '最新のチラシを確認'}</button>
+          {error && <div className="flyer-notice" role="status"><p>{error}</p></div>}
           {visible.map(store => <StoreFlyers key={store.id + (data?.fetchedAt ?? '')} store={store} onResult={displayResult} />)}
           {data && <p className="hint flyer-checked">確認：{new Date(data.fetchedAt).toLocaleString('ja-JP')}<br />チラシの掲載・更新状況は各店舗サイトでご確認ください。</p>}
         </div>
