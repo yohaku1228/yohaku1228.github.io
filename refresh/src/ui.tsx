@@ -30,14 +30,14 @@ export function Stat({ label, value, detail }: { label: string; value: number | 
   return <div className="stat"><span>{label}</span><strong>{value === null ? '未設定' : <Amount value={value} />}</strong>{detail && <small>{detail}</small>}</div>
 }
 
-export function SwipeRow({ children, label, onRemove }: { children: ReactNode; label: string; onRemove: () => void }) {
+export function SwipeRow({ children, label, onRemove, after }: { children: ReactNode; label: string; onRemove: () => void; after?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const start = useRef<{ x: number; y: number } | null>(null)
   const actionId = useId()
   return <li className="swipe-row" data-open={open}
     onTouchStart={event => {
       const touch = event.touches[0]
-      const control = event.target instanceof Element && event.target.closest('button, input, a, label')
+      const control = event.target instanceof Element && event.target.closest('button, input, textarea, select, a, label')
       start.current = event.touches.length === 1 && !control ? { x: touch.clientX, y: touch.clientY } : null
     }}
     onTouchEnd={event => {
@@ -54,6 +54,7 @@ export function SwipeRow({ children, label, onRemove }: { children: ReactNode; l
       <button type="button" className="quiet row-more" aria-label={label + 'の操作'} aria-expanded={open} aria-controls={actionId}
         onClick={() => setOpen(value => !value)}><Ellipsis size={18} aria-hidden="true" /></button>
     </div>
+    {after}
     <button type="button" id={actionId} className="swipe-delete" aria-label={label + 'を削除'} hidden={!open}
       onClick={() => { setOpen(false); onRemove() }}>削除</button>
   </li>

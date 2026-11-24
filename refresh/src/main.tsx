@@ -5,6 +5,7 @@ import { Accounts, accountTitles, type AccountView } from './accounts'
 import { CloudGate } from './cloud-gate'
 import { cloudEnabled } from './cloud'
 import { MonthlyAllocation } from './monthly-allocation'
+import { SaveFeedback } from './save-feedback'
 import { ThemeSettings } from './theme-settings'
 import { StoreSettings } from './store-settings'
 import { applyTheme, cacheTheme, cachedTheme, defaultTheme } from './theme'
@@ -81,7 +82,7 @@ function Home({ data, month, go, save, editorSection, closeEditor }: {
       {!totals.allocated && !totals.spent && <p className="empty">予算を設定すると、カテゴリー別の残額が表示されます。</p>}
       <button className="quiet" onClick={() => go('budget')}>変動費予算を編集 <ArrowRight size={16} /></button>
     </Panel>
-    <MonthlyAllocation key={'allocation:' + month} data={data} month={month} save={save} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />
+    <MonthlyAllocation home key={'allocation:' + month} data={data} month={month} save={save} openIncome={() => go('planning')} openFixed={() => go('fixed')} openRecords={() => go('records')} />
     {editorSection && <section id="home-budget-editor" className="stack home-budget-editor" aria-label="家計の入力・編集">
       <div className="home-editor-heading"><h2>{budgetSections.find(item => item.id === editorSection)?.label}を編集</h2><button className="quiet" onClick={closeEditor}>閉じる</button></div>
       <Planning key={month + editorSection} data={data} month={month} save={save} section={editorSection === 'planning' ? 'income' : editorSection} openBudget={() => go('budget')} />
@@ -92,6 +93,7 @@ function Home({ data, month, go, save, editorSection, closeEditor }: {
 function App() {
   const data = useLedger(s => s.ledger)
   const save = useLedger(s => s.update)
+  const saving = useLedger(s => s.cloudStatus === 'saving')
   useLayoutEffect(() => { const color = data.themeColor ?? defaultTheme; applyTheme(color); cacheTheme(color) }, [data.themeColor])
   const [month, setMonth] = useState(() => monthOf(today()))
   const [view, setView] = useState<View>('home')
@@ -119,7 +121,8 @@ function App() {
     <header className="top"><div className="top-inner"><div className="brand">MoneyFlow Manager<small>{data.household.name}の家計</small></div><div className="month header-month"><button aria-label="前の月" disabled={month <= '2000-01'} onClick={() => { setEditing(null); setMonth(addMonths(month, -1)) }}><ChevronLeft size={19} /></button><label className="month-label"><span aria-hidden="true">{month.slice(0, 4)}年{Number(month.slice(5))}月</span><input aria-label="表示する月" type="month" min="2000-01" max="2099-12" value={month} onChange={e => {
           if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) { setEditing(null); setMonth(e.target.value) }
         }} /></label><button aria-label="次の月" disabled={month >= '2099-12'} onClick={() => { setEditing(null); setMonth(addMonths(month, 1)) }}><ChevronRight size={19} /></button></div></div></header>
-    <main className="wrap">
+    <SaveFeedback />
+    <main className="wrap" aria-busy={saving}><fieldset className="save-scope" disabled={saving}>
       {view !== 'home' && <div className="page-head">
         <h1>{view === 'accounts' ? accountTitles[accountMode] : titles[view]}</h1>
 
@@ -169,7 +172,7 @@ function App() {
           </div>
         </section>)}
       </div>}
-    </main>
+    </fieldset></main>
     <nav className="nav" aria-label="メインメニュー"><div>{tabs.map(({ id, name, icon: Icon }) => (
       <button key={id} className={id === 'add' ? 'nav-primary' : undefined} aria-current={nav === id ? 'page' : undefined}
         onClick={() => go(id)}>

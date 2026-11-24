@@ -4,7 +4,7 @@ import type { MealContext } from './meals'
 export const cloudEnabled = import.meta.env.VITE_CLOUDFLARE === '1'
 
 async function request(path: string, options: RequestInit = {}) {
-  return fetch('/api/' + path, { ...options, cache: 'no-store', credentials: 'same-origin', redirect: 'error' })
+  return fetch('/api/' + path, { ...options, signal: options.signal ?? AbortSignal.timeout(20000), cache: 'no-store', credentials: 'same-origin', redirect: 'error' })
 }
 
 async function message(response: Response, fallback: string) {

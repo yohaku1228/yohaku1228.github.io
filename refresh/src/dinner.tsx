@@ -5,6 +5,7 @@ import { daysInMonth, foodWeek, monthly, monthOf, today } from './finance'
 import { Field, Panel, SwipeRow, form, str, uid, type Save } from './ui'
 import { FoodChat } from './food-chat'
 import { FlyerViewerButton } from './FlyerViewerButton'
+import { ShoppingMemo } from './shopping-memo'
 import { cloudEnabled } from './cloud'
 
 export function DinnerCalendar({ data, month, save }: { data: Ledger; month: string; save: Save }) {
@@ -13,8 +14,7 @@ export function DinnerCalendar({ data, month, save }: { data: Ledger; month: str
   const [editing, setEditing] = useState<MealRecord | null>(null)
   const [choice, setChoice] = useState('')
   const [entryStatus, setEntryStatus] = useState<'planned' | 'cooked'>(selected > date ? 'planned' : 'cooked')
-  const [shoppingVersion, setShoppingVersion] = useState(0)
-  const [shoppingNotice, setShoppingNotice] = useState('')
+  const [memoRequest, setMemoRequest] = useState<{ date: string; text: string; nonce: number } | null>(null)
   const [editingFavorite, setEditingFavorite] = useState<FavoriteMeal | null>(null)
   const [notice, setNotice] = useState('')
   const [formVersion, setFormVersion] = useState(0)
@@ -27,11 +27,9 @@ export function DinnerCalendar({ data, month, save }: { data: Ledger; month: str
   const totals = monthly(data, monthOf(date))
   const week = foodWeek(data, monthOf(date), date)
   const snapshot = { budget: totals.budget.amounts.food ?? 0, spent: totals.categorySpend.food ?? 0, weekRemaining: week.availableThisWeek, daysLeft: week.daysLeft, dayGuide: week.daily }
-  function selectDay(value: string) { setSelected(value); setEditing(null); setChoice(''); setEntryStatus(value > date ? 'planned' : 'cooked'); setNotice(''); setShoppingNotice('') }
+  function selectDay(value: string) { setSelected(value); setEditing(null); setChoice(''); setEntryStatus(value > date ? 'planned' : 'cooked'); setNotice('') }
   const shopping = data.mealShopping?.find(row => row.date === selected)
-  function saveShopping(text: string) {
-    if (save(old => ({ ...old, mealShopping: [...(old.mealShopping ?? []).filter(row => row.date !== selected), { date: selected, text }] }))) { setShoppingVersion(v => v + 1); setShoppingNotice('買い物メモをクラウドに保存しました。') }
-  }
+  function saveShopping(text: string) { setMemoRequest({ date: selected, text, nonce: Date.now() }) }
   return <div className="stack">
     <FlyerViewerButton />
     <Panel title="晩ごはんカレンダー">
@@ -75,14 +73,7 @@ export function DinnerCalendar({ data, month, save }: { data: Ledger; month: str
       {records.some(row => row.status === 'planned') ? <p className="hint">選択日の予定：{records.filter(row => row.status === 'planned').map(row => row.name).join('、')}</p> : candidates.length ? <ul className="meal-candidates">{candidates.map(item => <li key={item.id}><b>{item.name}</b><small>{item.lastCooked ? `前回 ${item.lastCooked.replaceAll('-', '/')}（${item.daysSince}日前）` : 'まだ作った日の記録がありません'}</small></li>)}</ul> : <p className="hint">14日以上空いた定番はありません。記録が増えると、間隔の空いた料理をここに表示します。</p>}
       {cloudEnabled && <FoodChat key={selected} snapshot={snapshot} meals={mealContext(data, date, selected)} dinnerMode onSaveAnswer={saveShopping} />}
     </Panel>
-    <Panel title={selected.replaceAll('-', '/') + ' の買い物メモ'}>
-      <form key={selected + ':' + shoppingVersion} onSubmit={form(fields => saveShopping(str(fields, 'shopping')))}>
-        <Field label="買うもの・購入量"><textarea className="meal-shopping-input" name="shopping" rows={7} maxLength={5000} defaultValue={shopping?.text ?? ''} placeholder="AIの回答を保存するか、買うものを入力" /></Field>
-        <div className="actions"><button className="primary">買い物メモを保存</button></div>
-      </form>
-      {shoppingNotice && <p className="hint" role="status">{shoppingNotice}</p>}
-      <p className="hint">予定と買い物メモは夫婦で共有します。別端末で更新された内容は画面を開き直すと読み込まれます。</p>
-    </Panel>
+    <ShoppingMemo key={selected} date={selected} householdId={data.household.id} savedText={shopping?.text ?? ''} save={save} request={memoRequest} />
     <details className="panel"><summary>家族の好み・食べる量</summary>
       <form onSubmit={form(fields => { if (save(old => ({ ...old, mealPreferences: str(fields, 'preferences') }))) setNotice('家族の好みを保存しました。') })}>
         <Field label="好み・苦手・食べる量・買い物のルール"><textarea className="meal-shopping-input" name="preferences" rows={4} maxLength={1000} defaultValue={data.mealPreferences ?? ''} placeholder="例：鶏肉は多め。辛さ控えめ。からあげは人気。" /></Field>
