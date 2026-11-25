@@ -15,7 +15,7 @@ export function MonthlyAllocation({ data, month, save, openIncome, openFixed, op
   const [account, setAccount] = useState('all')
   const [editingCard, setEditingCard] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
-  const [fixedOpen, setFixedOpen] = useState(false)
+  const [editingFixedId, setEditingFixedId] = useState<string | null>(null)
   const card = data.payments.find(row => row.id === editingCard)
   const key = editingCard + ':' + month
   const amount = data.monthlyCardAmounts?.[key]
@@ -47,15 +47,16 @@ export function MonthlyAllocation({ data, month, save, openIncome, openFixed, op
       <summary><span className="summary-card-heading">支出<span className="summary-toggle"><span className="when-closed">開く</span><span className="when-open">閉じる</span><ChevronDown size={20} /></span></span><strong className="summary-value">{yen(summary.expense)}</strong><span className="summary-description">この月分として振り分ける合計</span></summary>
       <div className="summary-content">
         {!home && <Field label="銀行・現金で絞り込み"><select aria-label="銀行・現金で絞り込み" value={account} onChange={e => setAccount(e.target.value)}><option value="all">すべての銀行・現金</option>{summary.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>}
+        {home && <div className="actions home-expense-tools"><button className="quiet" onClick={() => { setEditingFixedId('new'); setEditingCard(null) }}>＋ 固定費</button></div>}
+        {home && editingFixedId === 'new' && <Planning key="new-fixed" data={data} month={month} save={save} section="fixed" editorOnly fixedEditorId="new" onEditorClose={() => setEditingFixedId(null)} />}
         <div className="allocation-groups">{summary.groups.filter(group => home || account === 'all' || group.id === account).map(group => <section className="allocation-group" key={group.id}>
           <h3><span>{group.name}</span><Amount value={group.amount} /></h3>
-          <ul className="rows">{group.rows.map(row => <li key={row.id}><span><b>{row.name}</b><small>{row.kind === 'card' ? row.confirmed ? '確定額' : data.monthlyCardAmounts?.[row.paymentId + ':' + month] ? '入力した見込み額' : '利用記録・固定費から集計' : row.kind === 'fixed' ? '固定費' : '利用月の記録'}{row.personal ? ` ・ 個人分 ${yen(row.personal)}を含む` : ''}</small></span><Amount value={row.amount} />{row.kind === 'card' && <button className="quiet" aria-label={row.name + 'の月額を編集'} onClick={() => { setEditingCard(current => current === row.paymentId ? null : row.paymentId!); setNotice(''); requestAnimationFrame(() => document.getElementById('card-edit-' + row.paymentId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })) }}>編集</button>}{editingCard === row.paymentId && <div id={'card-edit-' + row.paymentId} className="inline-editor">{cardEditor}</div>}</li>)}</ul>
+          <ul className="rows">{group.rows.map(row => <li key={row.id}><span><b>{row.name}</b><small>{row.kind === 'card' ? row.confirmed ? '確定額' : data.monthlyCardAmounts?.[row.paymentId + ':' + month] ? '入力した見込み額' : '利用記録・固定費から集計' : row.kind === 'fixed' ? '固定費' : '利用月の記録'}{row.personal ? ` ・ 個人分 ${yen(row.personal)}を含む` : ''}</small></span><Amount value={row.amount} />{row.kind === 'card' && <button className="quiet" aria-label={row.name + 'の月額を編集'} onClick={() => { setEditingFixedId(null); setEditingCard(current => current === row.paymentId ? null : row.paymentId!); setNotice(''); requestAnimationFrame(() => document.getElementById('card-edit-' + row.paymentId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })) }}>編集</button>}{editingCard === row.paymentId && <div id={'card-edit-' + row.paymentId} className="inline-editor">{cardEditor}</div>}{home && row.kind === 'fixed' && <button className="quiet" aria-label={row.name + 'を編集'} onClick={() => { setEditingFixedId(value => value === row.id.slice(6) ? null : row.id.slice(6)); setEditingCard(null); requestAnimationFrame(() => document.getElementById('fixed-row-' + row.id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })) }}>編集</button>}{home && row.kind === 'fixed' && editingFixedId === row.id.slice(6) && <div className="fixed-row-editor" id={'fixed-row-' + row.id}><Planning key={editingFixedId} data={data} month={month} save={save} section="fixed" editorOnly fixedEditorId={editingFixedId} onEditorClose={() => setEditingFixedId(null)} /></div>}</li>)}</ul>
           {!group.rows.length && <p className="hint">この月分の支出はありません。</p>}
         </section>)}</div>
 
         {notice && <p className="hint" role="status">{notice}</p>}
-        <div className="actions">{home ? <button className="quiet" onClick={() => setFixedOpen(value => !value)} aria-expanded={fixedOpen}>固定費を追加・編集</button> : openFixed && <button className="quiet" onClick={openFixed}>固定費を追加・編集</button>}{openRecords && <button className="quiet" onClick={openRecords}>支出の記録を確認</button>}</div>
-        {home && fixedOpen && <div className="home-fixed-editor"><Planning data={data} month={month} save={save} section="fixed" /></div>}
+        {!home && <div className="actions">{openFixed && <button className="quiet" onClick={openFixed}>固定費を追加・編集</button>}{openRecords && <button className="quiet" onClick={openRecords}>支出の記録を確認</button>}</div>}
         <p className="hint">固定費と、この月に使ったカード・現金等を集計します。カードは翌月に移さず、利用月で表示。見込み額・確定額は後から変更できます。未使用の変動費予算は含みません。</p>
       </div>
     </details>

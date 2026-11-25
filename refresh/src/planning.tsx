@@ -4,14 +4,14 @@ import { activeFixed, addMonths, budgetFor, foodWeek, monthly, onDay, today, yen
 import type { FixedExpense, Income, Ledger, Month } from './model'
 import { Amount, BudgetRow, Field, form, Money, num, Panel, Stat, str, SwipeRow, uid, type Save } from './ui'
 
-export function Planning({ data, month, save, section, openBudget }: {
-  data: Ledger; month: Month; save: Save; section: 'income' | 'fixed' | 'budget'; openBudget?: () => void
+export function Planning({ data, month, save, section, openBudget, fixedEditorId, editorOnly = false, onEditorClose }: {
+  data: Ledger; month: Month; save: Save; section: 'income' | 'fixed' | 'budget'; openBudget?: () => void; fixedEditorId?: string; editorOnly?: boolean; onEditorClose?: () => void
 }) {
   const totals = monthly(data, month)
   const [incomeDraftId, setIncomeDraftId] = useState(uid)
   const [fixedDraftId, setFixedDraftId] = useState(uid)
   const [editingIncome, setEditingIncome] = useState<string | null>(null)
-  const [editingFixed, setEditingFixed] = useState<string | null>(null)
+  const [editingFixed, setEditingFixed] = useState<string | null>(fixedEditorId ?? null)
   const [allocatedDraft, setAllocatedDraft] = useState<number | null>(null)
   const [renaming, setRenaming] = useState(false)
   const incomes = data.incomes.filter(i => i.date.startsWith(month))
@@ -38,6 +38,7 @@ export function Planning({ data, month, save, section, openBudget }: {
     setFixedDraftId(uid()); setEditingFixed(id)
     requestAnimationFrame(() => document.getElementById('fixed-form')?.scrollIntoView({ block: 'nearest' }))
   }
+  function closeFixed() { setEditingFixed(null); onEditorClose?.() }
   function removeIncome(item: Income) {
     if (!window.confirm(`${item.label} ${yen(item.actual ?? item.forecast)} を削除しますか？`)) return
     if (save(old => ({ ...old, incomes: old.incomes.filter(row => row.id !== item.id) })) && editingIncome === item.id) {
@@ -78,7 +79,7 @@ export function Planning({ data, month, save, section, openBudget }: {
           dueDay: str(fields, 'day') ? num(fields, 'day') : null, startMonth: str(fields, 'start'),
           endMonth: str(fields, 'end') || null, kind: str(fields, 'kind') as FixedExpense['kind'],
         }
-        if (await confirmSave(save, old => ({ ...old, fixed: old.fixed.some(f => f.id === record.id) ? old.fixed.map(f => f.id === record.id ? record : f) : [...old.fixed, record] }))) setEditingFixed(null)
+        if (await confirmSave(save, old => ({ ...old, fixed: old.fixed.some(f => f.id === record.id) ? old.fixed.map(f => f.id === record.id ? record : f) : [...old.fixed, record] }))) closeFixed()
       })}>
         <div className="fields">
           <Field label="項目"><input name="name" defaultValue={fixed?.name} required maxLength={100} /></Field>
@@ -96,6 +97,7 @@ export function Planning({ data, month, save, section, openBudget }: {
         </div>
         <div className="actions"><button className="primary">{fixed ? '固定費を更新' : '固定費を保存'}</button><button type="button" className="quiet" onClick={() => setEditingFixed(null)}>取消</button>{fixed && <button className="quiet danger-text" type="button" onClick={async () => { if (window.confirm(fixed.name + 'を削除しますか？') && await confirmSave(save, old => ({ ...old, fixed: old.fixed.filter(row => row.id !== fixed.id) }))) setEditingFixed(null) }}>固定費を削除</button>}</div>
       </form>
+  if (editorOnly) return <>{fixedEditor}</>
   return <div className="stack">
     {section === 'income' && <Panel title="今月の給与・予備費" description="パパとママの給与見込みと、今月の生活費に回す予備費を入れます。">
       <div className="stats"><Stat label="今月の収入（見込みを含む）" value={totals.income} /><Stat label="確定した収入" value={incomes.reduce((total, item) => total + (item.actual ?? 0), 0)} /></div>

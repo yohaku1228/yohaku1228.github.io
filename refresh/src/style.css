@@ -328,3 +328,7 @@ button:not(:disabled):active, summary:active { transform: scale(.97); filter: br
 @media (prefers-reduced-motion: reduce) { button, summary { transition: none; } }
 
 body:has(dialog[open]) .save-feedback { display: none; }
+
+.fixed-row-editor { width: 100%; flex: 1 0 100%; min-width: 0; }
+.home-expense-tools { justify-content: end; margin-bottom: 10px; }
+.meal-entry-kind { margin-block: 6px 14px; font-size: 14px; color: var(--muted); }
